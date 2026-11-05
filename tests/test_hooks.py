@@ -146,7 +146,7 @@ def test_hooks_do_nothing_without_lanes(tmp_path, clean_env):
 
 @pytest.mark.parametrize(
     "rel",
-    ["src/api/cart/add.py", "src/types/cart.ts", "package.json", ".lanes/contracts/cart-api.md", ".lanes/notices/x.md", ".lanes/handoffs/T1-x.md"],
+    ["src/api/cart/add.py", "src/types/cart.ts", "package.json", ".lanes/contracts/cart-api.md", ".lanes/handoffs/T1-x.md", ".lanes/summaries/x.md"],
 )
 def test_guard_allows_own_lane_silently(repo, clean_env, rel):
     p = run_hook("pre_tool_guard", edit(repo, rel), repo, clean_env)
@@ -163,6 +163,31 @@ def test_guard_denies_other_lanes(repo, clean_env, rel, owner):
     assert out["hookEventName"] == "PreToolUse" and out["permissionDecision"] == "deny"
     assert f"belongs to {owner}" in out["permissionDecisionReason"]
     assert "lanes request --file" in out["permissionDecisionReason"]
+
+
+@pytest.mark.parametrize("tool", ["Edit", "Write", "MultiEdit"])
+@pytest.mark.parametrize(
+    "rel", [".lanes/notices/20261105T120000Z-t1-cart-api.md", ".lanes/notices/read-by/friend.txt", ".lanes/notices/new.md", ".Lanes/Notices/x.md"]
+)
+def test_guard_blocks_direct_notice_edits(repo, clean_env, rel, tool):
+    """Notices are written only by `lanes request`, `lanes notices` and the hooks, even by their author."""
+    p = run_hook("pre_tool_guard", edit(repo, rel, tool=tool), repo, clean_env)
+    out = p.json["hookSpecificOutput"]
+    assert out["permissionDecision"] == "deny"
+    assert "written only by Lanes" in out["permissionDecisionReason"] and "lanes notices amend" in out["permissionDecisionReason"]
+
+
+def test_guard_blocks_notebook_edit_in_notices(repo, clean_env):
+    data = payload("PreToolUse", repo, tool_name="NotebookEdit", tool_use_id="t",
+                   tool_input={"notebook_path": str(repo / ".lanes/notices/x.ipynb"), "new_source": "x", "cell_id": "c1"})
+    assert run_hook("pre_tool_guard", data, repo, clean_env).json["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+
+def test_contract_notice_tells_claude_to_amend_not_edit(repo, clean_env):
+    p = run_hook("post_tool_notice", edit(repo, ".lanes/contracts/cart-api.md", "a", "b", event="PostToolUse"), repo, clean_env)
+    (n,) = list_notices(repo)
+    text = p.json["hookSpecificOutput"]["additionalContext"]
+    assert f"lanes notices amend {n.id} --summary" in text and "don't edit the file" in text
 
 
 def test_guard_denies_unowned_file(repo, clean_env):

@@ -1,6 +1,7 @@
 """PreToolUse hook (Edit|Write|MultiEdit|NotebookEdit): block edits outside my lane.
 
-- In my lane, or anywhere in .lanes/ except other people's contracts: no output.
+- In my lane, or anywhere in .lanes/ except other people's contracts and
+  .lanes/notices/ (written only by the Lanes CLI and hooks): no output.
   We never return "allow", because that would skip the user's own permission prompts.
 - Another member's file, a hub file or an unowned file: deny, with a reason telling
   Claude whom to ask and how (`lanes request`).
@@ -9,7 +10,7 @@
 
 from __future__ import annotations
 
-from ..lane import check_lane
+from ..lane import check_edit
 from ..paths import repo_relative
 from .adapters import HookInput, deny
 from .common import load_ctx, run_hook, warn_once
@@ -36,7 +37,7 @@ def handle(inp: HookInput) -> int:
         rel = repo_relative(path, ctx.root)
         if rel is None:  # outside this repo: not ours to judge
             continue
-        decision = check_lane(ctx.plan, ctx.member, rel)
+        decision = check_edit(ctx.plan, ctx.member, rel)
         if not decision.allowed:
             deny(decision.reason, agent=inp.agent)
             return 0

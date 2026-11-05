@@ -293,6 +293,33 @@ def read_by_anyone(root: Path, notice_id: str) -> bool:
     return any(notice_id in read_ids(root, p.stem) for p in folder.glob("*.txt"))
 
 
+def find_notice(root: Path, notice_id: str) -> Notice | None:
+    return next((n for n in list_notices(root) if n.id == notice_id), None)
+
+
+def amend(root: Path, member_id: str, notice_id: str, summary: str | None = None, body: str | None = None) -> Notice:
+    """Rewrite the summary and/or body of a notice I wrote that nobody has read yet.
+
+    This is the only supported way to change a notice: the lane guard blocks direct
+    edits to .lanes/notices/, and writing through here always produces valid YAML.
+    """
+    n = find_notice(root, notice_id)
+    if n is None:
+        raise ValueError(f"no notice with id {notice_id!r} (see `lanes notices --all`)")
+    if n.from_member != member_id:
+        raise ValueError(f"notice {notice_id} was written by {n.from_member}; only its author can amend it")
+    if read_by_anyone(root, n.id):
+        raise ValueError(f"notice {notice_id} has already been read; send a new one with `lanes request --to <member>` instead")
+    if not (summary or "").strip() and not (body or "").strip():
+        raise ValueError("give --summary and/or --body")
+    if summary and summary.strip():
+        n.summary = summary.strip()
+    if body and body.strip():
+        n.body = body.replace("\\n", "\n")
+    write_notice(root, n)
+    return n
+
+
 # ---- high-level constructors ----------------------------------------------------------
 
 

@@ -179,9 +179,22 @@ def cmd_check(args) -> int:
 
 
 def cmd_notices(args) -> int:
-    from .notices import addressed_to, list_notices, mark_read, read_ids, unread_for
+    from .notices import addressed_to, amend, list_notices, mark_read, read_ids, unread_for
 
     ctx = load_ctx()
+    if args.action == "amend":
+        if not args.notice_id:
+            raise CliError('usage: lanes notices amend ID --summary "..." [--body "..."]')
+        try:
+            n = amend(ctx.root, ctx.member, args.notice_id, summary=args.summary, body=args.body)
+        except ValueError as exc:
+            raise CliError(str(exc)) from exc
+        print(f"Amended {n.path.relative_to(ctx.root).as_posix()}\n  summary: {n.summary}")
+        for line in n.body.splitlines():
+            print(f"    {line}")
+        return EXIT_OK
+    if args.summary or args.body or args.notice_id:
+        raise CliError("--summary/--body only work with `lanes notices amend ID`")
     if args.all:
         seen = read_ids(ctx.root, ctx.member)
         shown = [n for n in list_notices(ctx.root) if addressed_to(n, ctx.plan, ctx.member)]
@@ -287,7 +300,11 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("-q", "--quiet", action="store_true")
     s.set_defaults(func=cmd_check)
 
-    s = sub.add_parser("notices", help="list unread notices addressed to you")
+    s = sub.add_parser("notices", help="list unread notices addressed to you, or amend one you wrote")
+    s.add_argument("action", nargs="?", choices=["amend"], help="amend ID: rewrite your own unread notice")
+    s.add_argument("notice_id", nargs="?", metavar="ID", help=argparse.SUPPRESS)
+    s.add_argument("--summary", help="amend: the new one-sentence summary")
+    s.add_argument("--body", help="amend: the new body, 3-6 lines (\\n separates lines)")
     s.add_argument("--all", action="store_true", help="include notices you've already read")
     s.add_argument("--mark-read", nargs="*", metavar="ID", help="mark the listed (or given) notices read")
     s.set_defaults(func=cmd_notices)

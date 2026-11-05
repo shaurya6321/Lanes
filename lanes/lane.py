@@ -40,6 +40,33 @@ def check_lane(plan: Plan, member_id: str, rel_path: str) -> LaneDecision:
     return LaneDecision(False, own, reason)
 
 
+NOTICES_PREFIX = ".lanes/notices/"
+
+
+def is_notice_path(rel_path: str) -> bool:
+    # lower(): macOS and Windows file systems are case-insensitive by default
+    return rel_path.lower().startswith(NOTICES_PREFIX)
+
+
+def check_edit(plan: Plan, member_id: str, rel_path: str) -> LaneDecision:
+    """The lane rule for an agent's Edit/Write tools: `check_lane` plus "notices are Lanes-only".
+
+    Notices and read-by files may be committed by anyone (so `check_lane`, used by the
+    commit check, allows them), but only Lanes itself writes them, so a teammate's
+    notice can't be rewritten, deleted or marked read behind their back.
+    """
+    if is_notice_path(rel_path):
+        return LaneDecision(
+            False,
+            plan.owner_of(rel_path),
+            f"Lanes: `{rel_path}` is written only by Lanes, never edited directly. Use instead:\n"
+            f'  lanes request --file <path> "<what and why>"   ask an owner for a change\n'
+            f'  lanes notices amend <id> --summary "<one sentence>" [--body "<3-6 lines>"]   fix a notice you wrote\n'
+            f"  lanes notices --mark-read                       mark your notices read",
+        )
+    return check_lane(plan, member_id, rel_path)
+
+
 def _describe(own: Ownership) -> str:
     if own.kind == "contract" and own.contract:
         return f"contract `{own.contract.id}`"

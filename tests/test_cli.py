@@ -213,3 +213,50 @@ def test_example_plan_template_is_valid(fresh):
     plan = load_plan(fresh)
     assert [t.id for t in plan.tasks] == ["T1", "T2"]
     assert yaml.safe_load((fresh / ".lanes/plan.yaml").read_text())["feature"] == "my-feature"
+
+
+# ---- notices amend --------------------------------------------------------------------
+
+
+def _contract_notice(repo):
+    from lanes.notices import record_change
+
+    plan = load_plan(repo)
+    rel = ".lanes/contracts/cart-api.md"
+    notice, _ = record_change(repo, plan, "shaurya", rel, plan.owner_of(rel), ["+ addItem(sku, qty, note)"])
+    return notice
+
+
+def test_amend_rewrites_summary_and_body_as_valid_yaml(in_repo, capsys):
+    n = _contract_notice(in_repo)
+    code, out = run(capsys, "notices", "amend", n.id, "--summary", "Added `note: str` to addItem(sku, qty) -> Cart.",
+                    "--body", "+ addItem(sku, qty, note: str = '')\\nCallers can omit note.")
+    assert code == 0, out
+    text = n.path.read_text()
+    fm = yaml.safe_load(text.split("---")[1])  # strict YAML still parses
+    assert fm["summary"] == "Added `note: str` to addItem(sku, qty) -> Cart." and fm["to_tasks"] == ["T2", "T3"]
+    assert text.rstrip().endswith("+ addItem(sku, qty, note: str = '')\nCallers can omit note.")
+
+
+def test_amend_refuses_someone_elses_notice(in_repo, capsys, monkeypatch):
+    n = _contract_notice(in_repo)
+    monkeypatch.setenv("LANES_USER", "friend")
+    code, out = run(capsys, "notices", "amend", n.id, "--summary", "hijacked")
+    assert code == 1 and "only its author can amend it" in out
+    assert "hijacked" not in n.path.read_text()
+
+
+def test_amend_refuses_a_notice_already_read(in_repo, capsys):
+    from lanes.notices import mark_read
+
+    n = _contract_notice(in_repo)
+    mark_read(in_repo, "friend", [n.id])
+    code, out = run(capsys, "notices", "amend", n.id, "--summary", "too late")
+    assert code == 1 and "already been read" in out
+
+
+def test_amend_needs_a_known_id_and_some_text(in_repo, capsys):
+    n = _contract_notice(in_repo)
+    assert "no notice with id" in run(capsys, "notices", "amend", "nope", "--summary", "x")[1]
+    assert "give --summary" in run(capsys, "notices", "amend", n.id)[1]
+    assert "only work with" in run(capsys, "notices", "--summary", "x")[1]

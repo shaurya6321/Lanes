@@ -46,14 +46,17 @@ def handle(inp: HookInput) -> int:
         if created:
             messages.append(
                 f"Lanes: you changed {notice.topic}, so a change notice for {recipients} was written to {where}. "
-                "Now edit that file. Replace the auto-generated `summary:` line with one precise sentence wrapped in "
-                "double quotes (it is YAML), and make the "
-                "body 3–6 lines naming exactly what changed (renamed symbols, added or removed args, changed types). "
-                "Keep it under ~150 tokens with no secrets. The notice is for your teammates: don't mark it read yourself. "
+                "Now replace its auto-generated summary (don't edit the file; Lanes blocks that). Run:\n"
+                f'  lanes notices amend {notice.id} --summary "<one precise sentence>" --body "<line 1>\\n<line 2>..."\n'
+                "The body is 3–6 lines naming exactly what changed (renamed symbols, added or removed args, changed types), "
+                "under ~150 tokens, no secrets. The notice is for your teammates: don't mark it read yourself. "
                 "They see it after you commit and push."
             )
         else:
-            messages.append(f"Lanes: notice {where} was updated with this edit (to {recipients}). Make sure its summary still matches.")
+            messages.append(
+                f"Lanes: notice {where} was updated with this edit (to {recipients}). If its summary no longer matches, "
+                f'run `lanes notices amend {notice.id} --summary "..."`.'
+            )
     if messages:
         add_context("PostToolUse", "\n".join(messages), agent=inp.agent)
     return 0

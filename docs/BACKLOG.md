@@ -13,7 +13,7 @@ Phase 0 deliberately leaves these out. Each line says which phase it belongs to 
 - `/lanes-integrate`: ordered merges, Mergiraf, running the combined tests.
 
 ## Known gaps in Phase 0
-- **Writes made through Bash aren't guarded before they happen.** Only the pre-commit check catches them. A future option is a PreToolUse hook on Bash that parses common write patterns. It would be best-effort.
+- **Writes made through Bash aren't guarded before they happen.** Only the pre-commit check catches them. A future option is a PreToolUse hook on Bash that parses common write patterns. It would be best-effort. The same gap applies to `.lanes/notices/`: the guard blocks Edit/Write/NotebookEdit there, but a shell command like `echo > .lanes/notices/x.md` isn't caught, and the commit check allows notices because the `lanes` commands write them legitimately.
 - **Overlapping globs between different owners** (for example `src/**` and `src/api/**`) aren't rejected when the plan is validated. At lookup time the most specific pattern wins. Phase 2's planner should flag overlaps.
 - **Read state for notices** is kept in one append-only file per member, `.lanes/notices/read-by/<member>.txt`. That avoids git conflicts but grows forever. Prune it once the plan is archived.
 - **The "why" line in summaries** is taken from Claude's last message, so a turn that ends with a question gives a weak "why".

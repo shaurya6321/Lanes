@@ -54,6 +54,7 @@ To check it's working, run `lanes whoami` (your tasks and owned files) and `lane
 | `lanes status` | Shows a table of tasks, owners and statuses, unread notices per person, and a warning for any uncommitted change outside your lane. |
 | `lanes check PATH…` | Exits 0 if the path is in your lane and 2 if not, with the reason. `--staged` checks the files a commit would touch. |
 | `lanes notices` | Lists unread notices addressed to you. Use `--mark-read` once you've acted on them, or `--all` to include ones already read. |
+| `lanes notices amend ID --summary "…"` | Rewrites the summary (and `--body`) of a notice you wrote, as long as nobody has read it yet. Files in `.lanes/notices/` are never edited directly; the guard blocks that. |
 | `lanes request --file PATH "msg"` | Asks a path's owner for a change. |
 | `lanes handoff [TASK]` | Creates a handoff note from the template and prints its path. |
 
