@@ -19,29 +19,32 @@ Phase 0 has no servers. Everything is files in your repo, shared through git wit
 You need Python 3.11+, [uv](https://docs.astral.sh/uv/), git and Claude Code. Teammates on Windows also need Git for Windows. [docs/SETUP.md](docs/SETUP.md) has the full steps for both operating systems.
 
 ```bash
-# 1. Install the lanes CLI (once per machine)
-git clone git@github.com:shaurya6321/Lanes.git
-cd Lanes
-uv tool install --editable .
+# 1. Install the lanes CLI (once per machine; same command on macOS and Windows)
+uv tool install git+https://github.com/shaurya6321/Lanes
 lanes --version            # if not found: run `uv tool update-shell` and open a new terminal
 
-# 2. Set up the repo you want to build in
+# 2. Set up the repo you want to build in (one person)
 cd path/to/your-project
 lanes init                 # creates .lanes/, CLAUDE.md, AGENTS.md, .claude/settings.json, git hook
-#    then edit .lanes/plan.yaml: members, tasks, owned globs, contracts
+#    then edit .lanes/plan.yaml: members (with their git emails), tasks, owned globs, contracts
 
-# 3. Tell Lanes who you are (use your member id from plan.yaml)
-echo 'export LANES_USER=shaurya' >> ~/.zshrc && source ~/.zshrc     # macOS
-#   Windows PowerShell:  setx LANES_USER friend   (then open a new terminal)
+# 3. Share the setup with your team
+git add -A && git commit -m "Set up Lanes" && git push
 
-# 4. Share the setup with your team
-git add .lanes CLAUDE.md AGENTS.md .claude .gitignore .gitattributes
-git commit -m "Set up Lanes"
-git push
+# 4. Each teammate, after cloning: install the commit check (git hooks aren't cloned)
+lanes init                 # leaves the plan and every committed file alone
 
 # 5. Work as usual
+lanes sync                 # receive teammates' notices and summaries
 claude                     # the Lanes briefing appears at the top of the session
+lanes sync                 # share yours (commits .lanes/ only; never pushes code without --include-code)
 ```
+
+Lanes knows who you are from `git config user.email`, matched against `members[].email` in the plan. To override it, set `LANES_USER` to your member id.
+
+**Private repo?** While `shaurya6321/Lanes` is private, the install needs GitHub access: you must be a collaborator, and git must be able to sign in. On Windows, Git for Windows opens a browser sign-in the first time. If https doesn't work for you but SSH does, use `uv tool install git+ssh://git@github.com/shaurya6321/Lanes.git`.
+
+**Updating:** `uv tool upgrade lanes`. **Developing Lanes itself:** clone the repo and run `uv tool install --editable .` instead, so `lanes` runs your working copy.
 
 To check it's working, run `lanes whoami` (your tasks and owned files) and `lanes status` (everyone's tasks and unread notices).
 

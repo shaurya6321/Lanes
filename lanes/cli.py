@@ -78,9 +78,11 @@ def cmd_init(args) -> int:
     print(
         "\nNext:\n"
         "  1. Edit .lanes/plan.yaml: real members, tasks, owned globs, contracts.\n"
-        "  2. Each teammate sets LANES_USER to their member id (see docs/SETUP.md).\n"
+        "  2. Each teammate is matched by `git config user.email` (or sets LANES_USER to their member id).\n"
         "  3. Commit and push .lanes/, CLAUDE.md, AGENTS.md and .claude/. After that, `lanes sync` shares .lanes/.\n"
-        "  4. Start a new Claude Code session; the Lanes briefing appears at the top."
+        "  4. Teammates run `lanes init` once in their clone to install the commit check.\n"
+        "  5. Start a new Claude Code session; the Lanes briefing appears at the top.\n"
+        "Setup guide: https://github.com/shaurya6321/Lanes/blob/main/docs/SETUP.md"
     )
     return EXIT_OK
 

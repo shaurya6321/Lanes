@@ -22,29 +22,29 @@ claude --version      # 2.1.318 or newer; update with `claude update`
 ## 2. Get access to the repo
 
 1. Ask Shaurya to add your GitHub account as a collaborator on `shaurya6321/Lanes`, then accept the invite email.
-2. Make sure git can reach GitHub over SSH. Run `ssh -T git@github.com`; it should say "Hi <your-username>!". If it doesn't, follow [GitHub's SSH key guide](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/generating-a-new-ssh-key-and-adding-it-to-the-ssh-agent).
+2. Make sure git can reach GitHub. With https (the default on Windows), Git for Windows signs you in through the browser the first time. With SSH, run `ssh -T git@github.com`; it should say "Hi <your-username>!". If it doesn't, follow [GitHub's SSH key guide](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/generating-a-new-ssh-key-and-adding-it-to-the-ssh-agent).
 
 ## 3. Install the `lanes` CLI
 
 ```
-git clone git@github.com:shaurya6321/Lanes.git
-cd Lanes
-uv tool install --editable .
+uv tool install git+https://github.com/shaurya6321/Lanes
 lanes --version
 ```
 
-If `lanes` isn't found, run `uv tool update-shell` and open a new terminal.
+If `lanes` isn't found, run `uv tool update-shell` and open a new terminal. To update later, run `uv tool upgrade lanes`.
 
-The install is "editable", so running `git pull` in the Lanes folder updates the `lanes` command too.
+While the Lanes repo is private, uv needs to get it through git as you. On Windows, Git for Windows opens a browser sign-in the first time. If https fails but `ssh -T git@github.com` works, install over SSH instead: `uv tool install git+ssh://git@github.com/shaurya6321/Lanes.git`.
+
+Only if you're developing Lanes itself: clone it and run `uv tool install --editable .` in the clone, so `lanes` runs your working copy.
 
 ## 4. Tell Lanes who you are
 
-Use your member `id` from the project's `.lanes/plan.yaml`.
+Lanes matches `git config user.email` (in that repo) against `members[].email` in the project's `.lanes/plan.yaml`. If your email is in the plan, there's nothing to do. Check with `lanes whoami` from inside the project.
+
+If it doesn't match, either ask the plan owner to put your git email in the plan, or set `LANES_USER` to your member `id`:
 
 - macOS: run `echo 'export LANES_USER=friend' >> ~/.zshrc`, then open a new terminal.
 - Windows: run `setx LANES_USER friend`, then open a new terminal. Restart Cursor or VS Code too, so their built-in terminals pick up the variable.
-
-Check it with `lanes whoami` from inside the project. If you skip this step, Lanes tries to match `git config user.email` against the member emails in the plan.
 
 ## 5. Open the project and start Claude Code
 
