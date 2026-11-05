@@ -90,7 +90,11 @@ def build_briefing(
         if s.updated >= cutoff and s.session_id != exclude_session:
             items.append((s.updated, "summaries", "\n".join(s.lines[:5]).replace("## ", "- ", 1)))
 
-    footer = "\nAfter acting on notices, run `lanes notices --mark-read`. Run `lanes status` any time to see who owns what."
+    footer = (
+        "\nAfter acting on notices, run `lanes notices --mark-read`. Notices, summaries and handoffs reach teammates "
+        "only through git: when you finish, suggest your human run `lanes sync` (commits .lanes/ only, pulls, pushes). "
+        "Run `lanes status` any time to see who owns what."
+    )
     budget = cap - len(fixed) - len(footer) - 200
     kept: list[tuple[datetime, str, str]] = []
     used = 0

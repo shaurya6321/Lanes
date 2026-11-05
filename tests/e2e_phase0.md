@@ -28,7 +28,8 @@ git remote add origin git@github.com:<you>/lanes-e2e.git && git push -u origin m
 ## 1. Both machines: identity
 
 - A: `export LANES_USER=shaurya`. B: `setx LANES_USER friend`, then open a new terminal.
-- B: run `git clone ...` then `cd lanes-e2e`.
+- B: run `git clone ...`, then `cd lanes-e2e` and `lanes init`. Git hooks aren't cloned, so this installs the commit check; it leaves the plan and other files alone.
+- [ ] On B, `git status` is clean after `lanes init`.
 - [ ] On both machines, `lanes whoami` shows the right member and tasks.
 - [ ] On both machines, `/hooks` inside `claude` lists SessionStart, PreToolUse, PostToolUse and Stop.
 
@@ -49,29 +50,42 @@ git remote add origin git@github.com:<you>/lanes-e2e.git && git push -u origin m
 ## 4. A contract change sends a notice only downstream
 
 - A: ask Claude to "Add a `getItem(id: str) -> Item` function to the Interface section of `.lanes/contracts/example-api.md`."
-- [ ] After the edit, Claude says a notice was written to `.lanes/notices/<...>-t1-example-api.md`, and then rewrites its `summary:` line into one precise sentence.
+- [ ] After the edit, Claude says a notice was written to `.lanes/notices/<...>-t1-example-api.md`, and then runs `lanes notices amend <id> --summary "..."` with one precise sentence. It does **not** edit the notice file (the guard would block it).
 - [ ] The notice's front matter has `to_tasks: [T2]` and `from_rank: 1`.
 - A: end the session. A turn that only answers a question is fine.
 - [ ] `.lanes/summaries/shaurya-<date>.md` exists, with one section listing `.lanes/contracts/example-api.md`.
-- A: `git add -A && git commit -m "Contract: add getItem" && git push`.
-- [ ] The commit goes through, because the pre-commit lane check allows A's own files.
+- A: `lanes sync`.
+- [ ] It says it committed the `.lanes/` files and pushed 1 commit (`.lanes/ only`). The lane check ran on that commit and allowed it.
 
 ## 5. B's next session shows the notice
 
-- B: `git pull`, then start a **new** `claude` session.
+- B: `lanes sync`, then start a **new** `claude` session.
 - [ ] The briefing has "Unread notices for you (1)", with A's summary and the getItem change lines.
 - [ ] The briefing has "Recent session summaries (last 24h)", with A's session.
 - [ ] Ask Claude "What did my teammate change?" It answers from the briefing without opening any files.
-- B: `lanes notices --mark-read`, then commit and push. Then on A, run `git pull` and `lanes status`.
+- B: `lanes notices --mark-read`, then `lanes sync`. Then on A, run `lanes sync` and `lanes status`.
 - [ ] `lanes status` shows `friend 0` unread.
 
 ## 6. Notices never flow upstream
 
-- B: in `.lanes/plan.yaml`, add a contract `ui-events` with `file: .lanes/contracts/ui-events.md` and `owner: friend`. Add `implements: [ui-events]` to T2, and `uses: [ui-events]` to T1. That last part is deliberately the wrong direction. Commit.
+- B: in `.lanes/plan.yaml`, add a contract `ui-events` with `file: .lanes/contracts/ui-events.md` and `owner: friend`. Add `implements: [ui-events]` to T2, and `uses: [ui-events]` to T1. That last part is deliberately the wrong direction. Run `lanes sync`.
+- [ ] No plan notice is written, because B isn't the plan owner (only A's ownership edits send plan notices).
 - B: ask Claude to "create `.lanes/contracts/ui-events.md` describing a Clicked event."
 - [ ] **No notice** is created for T1, because rank 2 never notifies rank 1. `ls .lanes/notices` shows no new file.
 
+## 6b. Plan changes notify the affected task
+
+- A: `lanes sync`, then ask Claude to "move `src/ui/shared/**` into T1's `owns` in `.lanes/plan.yaml`" (add the glob to T1 and, if T2 has it, remove it there).
+- [ ] Claude says a **plan notice** for friend was written. `lanes notices --all` on A doesn't show it (it isn't for A).
+- A: `lanes sync`. B: `lanes sync`, then `lanes notices`.
+- [ ] B sees a `plan` notice listing `~ T1 owns: +src/ui/shared/**`.
+
 ## 7. Safety nets
+
+- B: ask Claude to "fix the typo in the newest file in `.lanes/notices/`".
+- [ ] The edit is **blocked** with "written only by Lanes", and Claude suggests `lanes notices amend` (which only works for notices B wrote) or `lanes request`.
+- B: make a code commit in B's lane (`src/ui/x.txt`), don't push it, then mark a notice read and run `lanes sync`.
+- [ ] `lanes sync` lists the code commit and says "Not pushed". `lanes sync --include-code` then pushes both.
 
 - B: from a terminal, without Claude, run `echo x > src/api/sneaky.py && git add -A && git commit -m test`.
 - [ ] The commit is **blocked** by the pre-commit lane check, with the same message the guard gives. Clean up with `git restore --staged src/api/sneaky.py`, then delete the file.

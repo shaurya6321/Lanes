@@ -50,7 +50,8 @@ Check it with `lanes whoami` from inside the project. If you skip this step, Lan
 
 ```
 cd path/to/the-project
-git pull
+lanes init      # once per clone: installs the git commit check (git hooks aren't cloned); leaves the plan alone
+lanes sync
 claude
 ```
 
@@ -58,10 +59,21 @@ The first time you open a repo, Claude Code asks whether you trust it. Say yes, 
 
 ## Daily loop
 
-1. **Pull** at the start: `git pull`. Notices and summaries arrive this way in Phase 0.
+1. **Sync** at the start: `lanes sync`. In Phase 0, notices, summaries and handoffs travel through git, so this is how you receive them.
 2. **Work** in your lane. If Claude needs something outside it, it runs `lanes request` instead of editing.
-3. **Commit and push** often, including `.lanes/`. Your notices and summaries reach teammates when you push.
-4. **Before you stop for the day**, run `/lanes-handoff` if someone else might pick up your task.
+3. **Commit your code** as usual with `git commit`.
+4. **Sync** when you finish a chunk of work and before you stop: `lanes sync`. This is how teammates receive your notices, requests, read marks and summaries.
+5. **Before you stop for the day**, run `/lanes-handoff` if someone else might pick up your task, then `lanes sync`.
+
+### What `lanes sync` does
+
+1. Commits `.lanes/` **only** (`git commit -- .lanes`). Code you've staged stays staged, and the lane check still runs on the commit.
+2. Runs `git pull --rebase --autostash`. Uncommitted work is stashed and restored, so it never blocks the pull. That matters because Lanes rewrites your session summary after every Claude reply. If the pull hits a conflict, the rebase is undone, your branch stays as it was, and the conflicting files are listed.
+3. Pushes, **only if every unpushed commit touches `.lanes/` alone**. If you have unpushed code commits, it lists them and stops (exit code 3). Run `lanes sync --include-code` to push them too, or `git push` yourself when the code is ready.
+
+Phase 0 assumes the whole team works on **one shared branch** (usually `main`). Notices only reach teammates who pull the same branch, and `lanes sync` warns if you're on a different branch from the remote's default.
+
+If you run `git pull --rebase` yourself instead of `lanes sync`, it refuses whenever your working tree is dirty, which with Lanes is after almost every Claude reply. Either use `lanes sync`, or turn on autostash for this repo with `git config rebase.autoStash true`. A plain `git pull` (merge) isn't affected.
 
 ## Troubleshooting
 
@@ -69,7 +81,11 @@ The first time you open a repo, Claude Code asks whether you trust it. Say yes, 
 |---|---|
 | No briefing at session start | Run `/hooks` inside Claude Code to confirm the four Lanes hooks are listed. Make sure `lanes --version` works in the same terminal, and check that you trusted the folder. |
 | "can't tell who you are" | `LANES_USER` isn't set, or isn't a member id in `.lanes/plan.yaml`. Run `lanes whoami`. |
-| "plan.yaml is invalid" | Run `lanes status` to see every error. Fix the plan, commit it and push. |
+| "plan.yaml is invalid" | Run `lanes status` to see every error. Fix the plan, then `lanes sync`. |
+| A teammate didn't get your notice | You haven't run `lanes sync` since writing it, they haven't synced since, or you're on different branches. |
+| `lanes sync` says "Not pushed: … contain code" | You have unpushed code commits. Push them when ready with `lanes sync --include-code` (or `git push`). The `.lanes/` commit is already made and will go with them. |
+| `lanes sync` stops on a conflict | Nothing was changed. Run `git pull --rebase --autostash`, fix the listed files, `git rebase --continue`, then `lanes sync` again. |
+| "cannot pull with rebase: You have unstaged changes" | You ran `git pull --rebase` directly. Use `lanes sync`, or `git config rebase.autoStash true`. |
 | A commit is blocked by the lane check | The commit touches someone else's files. Unstage them with `git restore --staged <path>` and ask the owner with `lanes request --file <path> "..."`. If the owner has agreed, bypass the check once with `git commit --no-verify`. |
 | `lanes` works in one terminal but not in your editor | Restart the editor so it picks up the new `PATH` and `LANES_USER`. |
 | Windows: the hook reports `/bin/sh` not found | Install Git for Windows. git uses its `sh.exe` to run the pre-commit hook. |

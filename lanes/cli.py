@@ -12,7 +12,7 @@ from pathlib import Path
 
 from . import __version__
 
-EXIT_OK, EXIT_ERROR, EXIT_OUT_OF_LANE = 0, 1, 2
+EXIT_OK, EXIT_ERROR, EXIT_OUT_OF_LANE = 0, 1, 2  # `sync` also returns 3: code commits held back
 
 HOOK_MODULES = {
     "session-start": "session_start",
@@ -79,7 +79,7 @@ def cmd_init(args) -> int:
         "\nNext:\n"
         "  1. Edit .lanes/plan.yaml: real members, tasks, owned globs, contracts.\n"
         "  2. Each teammate sets LANES_USER to their member id (see docs/SETUP.md).\n"
-        "  3. Commit and push .lanes/, CLAUDE.md, AGENTS.md and .claude/.\n"
+        "  3. Commit and push .lanes/, CLAUDE.md, AGENTS.md and .claude/. After that, `lanes sync` shares .lanes/.\n"
         "  4. Start a new Claude Code session; the Lanes briefing appears at the top."
     )
     return EXIT_OK
@@ -205,7 +205,7 @@ def cmd_notices(args) -> int:
     if args.mark_read is not None:
         ids = args.mark_read or [n.id for n in shown]
         n = mark_read(ctx.root, ctx.member, ids)
-        print(f"Marked {n} notice(s) read for {ctx.member}. Commit .lanes/notices/read-by/{ctx.member}.txt to share it.")
+        print(f"Marked {n} notice(s) read for {ctx.member}. Run `lanes sync` to share it.")
         return EXIT_OK
 
     if not shown:
@@ -234,7 +234,7 @@ def cmd_request(args) -> int:
     except ValueError as exc:
         raise CliError(str(exc)) from exc
     print(f"Request written: {notice.path.relative_to(ctx.root).as_posix()} (to {', '.join(notice.to_members)})")
-    print("Commit and push it so the owner sees it in their next session.")
+    print("Run `lanes sync` so the owner sees it in their next session.")
     return EXIT_OK
 
 
@@ -269,6 +269,15 @@ def cmd_handoff(args) -> int:
     path.write_text(text, encoding="utf-8", newline="\n")
     print(path.relative_to(ctx.root).as_posix())
     return EXIT_OK
+
+
+def cmd_sync(args) -> int:
+    from .sync import sync
+
+    ctx = load_ctx()
+    result = sync(ctx.root, ctx.plan, ctx.member, include_code=args.include_code)
+    print("\n".join(result.lines), file=sys.stderr if result.code == EXIT_ERROR else sys.stdout)
+    return result.code
 
 
 def cmd_hook(args) -> int:
@@ -320,6 +329,15 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--task", help="task id (default: your in-progress task)")
     s.add_argument("task_pos", nargs="?", metavar="TASK", help=argparse.SUPPRESS)
     s.set_defaults(func=cmd_handoff)
+
+    s = sub.add_parser(
+        "sync",
+        help="share .lanes/ with teammates: commit .lanes/ only, pull --rebase --autostash, push",
+        description="Commit .lanes/ only, then `git pull --rebase --autostash`, then push. If any unpushed "
+        "commit contains code, it lists them and stops (exit 3) unless --include-code.",
+    )
+    s.add_argument("--include-code", action="store_true", help="also push unpushed commits that contain code")
+    s.set_defaults(func=cmd_sync)
 
     s = sub.add_parser("hook", help="run a hook (called by Claude Code / git, not by hand)")
     s.add_argument("name", choices=sorted(HOOK_MODULES))

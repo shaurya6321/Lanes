@@ -56,7 +56,7 @@ def handle(inp: HookInput) -> int:
                 f'  lanes notices amend {notice.id} --summary "<one precise sentence>" --body "<line 1>\\n<line 2>..."\n'
                 "The body is 3–6 lines naming exactly what changed (renamed symbols, added or removed args, changed types), "
                 "under ~150 tokens, no secrets. The notice is for your teammates: don't mark it read yourself. "
-                "They see it after you commit and push."
+                "They see it after `lanes sync` (suggest it to your human when you finish)."
             )
         else:
             messages.append(
@@ -85,7 +85,7 @@ def _plan_messages(ctx, session_id: str | None) -> list[str]:
     verb = "written to" if created else "updated in"
     return [
         f"Lanes: you changed task ownership in the plan, so a plan notice for {who} was {verb} {where}. "
-        f"It lists every change since the last commit and goes out when you commit and push. "
+        f"It lists every change since the last commit and goes out with the next `lanes sync`. "
         f'To replace its auto-generated summary, run `lanes notices amend {notice.id} --summary "..."`.'
     ]
 

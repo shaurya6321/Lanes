@@ -12,7 +12,7 @@ When two people point coding agents at one repo, neither agent knows what the ot
 - **One-way change notices.** When you change a contract or shared file you own, a short notice goes to downstream tasks only (lower rank to higher rank), so two agents never ping-pong.
 - **Summaries and handoffs.** Each session leaves a 3–5 line summary, and `/lanes-handoff` writes a handoff note. The next session can continue without anyone re-explaining.
 
-Phase 0 has no servers. Everything is files in your repo, synced with `git push` and `git pull`.
+Phase 0 has no servers. Everything is files in your repo, shared through git with `lanes sync`.
 
 ## Quickstart
 
@@ -57,6 +57,7 @@ To check it's working, run `lanes whoami` (your tasks and owned files) and `lane
 | `lanes notices amend ID --summary "…"` | Rewrites the summary (and `--body`) of a notice you wrote, as long as nobody has read it yet. Files in `.lanes/notices/` are never edited directly; the guard blocks that. |
 | `lanes request --file PATH "msg"` | Asks a path's owner for a change. |
 | `lanes handoff [TASK]` | Creates a handoff note from the template and prints its path. |
+| `lanes sync` | Shares `.lanes/` with the team: commits `.lanes/` only, runs `git pull --rebase --autostash`, then pushes. It pushes on its own only when every unpushed commit is `.lanes/`-only; otherwise it lists your code commits and stops (exit 3) unless you pass `--include-code`. |
 
 In Claude Code, `/lanes-status` explains the current status, and `/lanes-handoff` writes a handoff note.
 
