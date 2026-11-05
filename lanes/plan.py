@@ -81,6 +81,17 @@ class Plan:
     contracts: list[Contract] = field(default_factory=list)
     tasks: list[Task] = field(default_factory=list)
     root: Path | None = None
+    plan_owner: str | None = None  # explicit top-level `owner:`; see `owner` below
+
+    @property
+    def owner(self) -> str | None:
+        """Who may change ownership in the plan: `owner:` if set, else the lowest-rank task's owner."""
+        if self.plan_owner:
+            return self.plan_owner
+        ranked = self.tasks_by_rank()
+        if ranked:
+            return ranked[0].owner
+        return self.members[0].id if self.members else None
 
     # ---- lookups -----------------------------------------------------------
 
@@ -213,10 +224,14 @@ def parse_plan(data: Any, root: Path | None = None) -> Plan:
                 errors.append(f"tasks: duplicate id {task.id!r}")
             tasks.append(task)
 
+    plan_owner = data.get("owner")
+    if plan_owner is not None:
+        plan_owner = check_owner(plan_owner, "plan `owner`")
+
     _check_cross_refs(tasks, contracts, hubs, errors)
     if errors:
         raise PlanError(errors)
-    return Plan(feature, updated, members, hubs, contracts, tasks, root)
+    return Plan(feature, updated, members, hubs, contracts, tasks, root, plan_owner)
 
 
 def _list(data: dict, key: str, errors: list[str]) -> list:

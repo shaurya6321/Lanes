@@ -41,7 +41,7 @@ def iso(dt: datetime) -> str:
 @dataclass
 class Notice:
     id: str
-    kind: str  # "change" | "request"
+    kind: str  # "change" | "request" | "plan"
     from_member: str
     from_task: str | None
     from_rank: int
@@ -53,6 +53,7 @@ class Notice:
     contract: str | None = None
     file: str | None = None
     session: str | None = None
+    base: str | None = None  # plan notices: the commit the plan was compared against
     path: Path | None = field(default=None, compare=False)
 
     def front_matter(self) -> dict:
@@ -68,6 +69,7 @@ class Notice:
             "file": self.file,
             "created": self.created,
             "session": self.session,
+            "base": self.base,
             "summary": self.summary,
         }
         return {k: v for k, v in data.items() if v is not None}
@@ -218,7 +220,7 @@ def parse_notice(path: Path) -> Notice | None:
             fm = None
         if not isinstance(fm, dict):
             fm = _lenient_front_matter(m.group(1))
-        for k in ("from_task", "contract", "file", "session"):
+        for k in ("from_task", "contract", "file", "session", "base"):
             if fm.get(k) == []:  # lenient parser: "key:" with nothing after it
                 fm[k] = None
         return Notice(
@@ -235,6 +237,7 @@ def parse_notice(path: Path) -> Notice | None:
             contract=fm.get("contract"),
             file=fm.get("file"),
             session=fm.get("session"),
+            base=fm.get("base"),
             path=path,
         )
     except (OSError, ValueError, yaml.YAMLError):

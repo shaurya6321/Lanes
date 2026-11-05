@@ -282,6 +282,36 @@ def test_top_rank_contract_edit_has_no_recipients(repo, clean_env, plan_dict):
     assert p.stdout == "" and list_notices(repo) == []
 
 
+def _plan_edit(repo, plan_dict, user, env):
+    write_plan(repo, plan_dict)
+    return run_hook("post_tool_notice", edit(repo, ".lanes/plan.yaml", "x", "y", event="PostToolUse"), repo, env, user=user)
+
+
+def test_plan_owner_editing_ownership_sends_plan_notice(repo, clean_env, plan_dict):
+    plan_dict["tasks"][1]["owns"] = ["src/pages/checkout/**"]
+    plan_dict["tasks"][0]["owns"].append("src/components/checkout/**")
+    p = _plan_edit(repo, plan_dict, "shaurya", clean_env)
+    (n,) = list_notices(repo)
+    assert n.kind == "plan" and n.to_tasks == ["T2"]
+    text = p.json["hookSpecificOutput"]["additionalContext"]
+    assert "plan notice for friend" in text and f"lanes notices amend {n.id}" in text
+    p = run_hook("session_start", payload("SessionStart", repo, source="startup"), repo, clean_env, user="friend")
+    assert "-src/components/checkout/**" in p.json["hookSpecificOutput"]["additionalContext"]
+
+
+def test_non_owner_editing_ownership_is_warned_not_broadcast(repo, clean_env, plan_dict):
+    plan_dict["tasks"][0]["owns"] = ["src/api/cart/**"]
+    p = _plan_edit(repo, plan_dict, "friend", clean_env)
+    assert list_notices(repo) == []
+    assert "only the plan owner (shaurya)" in p.json["hookSpecificOutput"]["additionalContext"]
+
+
+def test_plan_status_edit_is_silent(repo, clean_env, plan_dict):
+    plan_dict["tasks"][1]["status"] = "in_progress"
+    p = _plan_edit(repo, plan_dict, "friend", clean_env)
+    assert p.stdout == "" and list_notices(repo) == []
+
+
 # ---- Stop summary --------------------------------------------------------------------------
 
 

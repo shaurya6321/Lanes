@@ -5,6 +5,7 @@
 #   - Lower rank = upstream. Notices flow 1 -> 2 -> 3, never back. Merge in rank order.
 feature: my-feature
 updated: $today
+owner: $member              # plan owner: their ownership edits notify affected tasks
 members:
   - id: $member
     email: $email

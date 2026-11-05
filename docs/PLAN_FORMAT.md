@@ -7,6 +7,7 @@ The plan is the single source of truth for who does what. It lives in git, and e
 ```yaml
 feature: checkout-v1
 updated: 2026-11-05
+owner: shaurya        # the plan owner (optional; defaults to the rank-1 task's owner)
 members:
   - id: shaurya
     email: shaurya@example.com
@@ -46,6 +47,7 @@ tasks:
 |---|---|---|
 | `feature` | yes | Name of the feature this plan covers. |
 | `updated` | no | Date the plan last changed. Shown in `lanes status`. |
+| `owner` | no | The member who changes who owns what. Their ownership edits send plan notices. Defaults to the owner of the lowest-rank task. |
 | `members[].id` | yes | Short id made of letters, digits, `.`, `_` and `-`. Each person sets `LANES_USER` to their id. |
 | `members[].email` | no | Used when `LANES_USER` isn't set: Lanes matches it against `git config user.email`. The match ignores case. |
 | `hub_files[].path` | yes | A path or glob for a shared file that has exactly one owner, such as `package.json` or a types folder. |
@@ -77,7 +79,7 @@ tasks:
 Lanes checks these in order, and the first match decides:
 
 1. **A contract file:** the contract's owner. This check comes before rule 2 because contracts live in `.lanes/`.
-2. **Anything else under `.lanes/`:** anyone may write it. This covers notices, handoffs, summaries, `decisions.md` and `plan.yaml`.
+2. **Anything else under `.lanes/`:** anyone may write it. This covers handoffs, summaries, `decisions.md` and `plan.yaml`. Notices in `.lanes/notices/` may be committed by anyone but are written only by `lanes` commands and the hooks; the guard blocks direct edits there.
 3. **A hub file:** the hub file's owner. If several hub patterns match, the most specific one wins.
 4. **A task's `owns` glob:** that task's owner. If several patterns match, the most specific wins, meaning the one with the longest literal prefix. For example, `tests/e2e_phase0.md` beats `tests/**`.
 5. **Nothing matched:** the path is unowned, and nobody may edit it until the plan gives it an owner.
@@ -90,6 +92,7 @@ You may edit a path when you are its owner through any of your tasks, hub files 
 - A contract is changed only by its owner. Every change creates a notice for tasks with a **higher rank** that `use` the contract or depend on the changing task, directly or indirectly.
 - A notice never goes to a task of the same or a lower rank. This prevents two agents from reacting to each other in a loop.
 - Requests made with `lanes request` go straight to the owner whatever the rank, because they are explicit asks rather than automatic reactions.
+- **Plan changes:** when the plan owner edits `plan.yaml`, Lanes compares it with the last commit and sends one `kind: plan` notice to every task whose `owns`, `uses`, `implements`, `owner` or `rank` changed (and to a reassigned task's former owner). Plan notices skip the rank rule, because a task losing files must hear about it. They can't loop, because only the plan owner's edits create them. Edits by anyone else send nothing, and Claude is told to undo them unless the plan owner agreed. Status-only edits send nothing.
 - Merge order equals rank order.
 
 ## Validation

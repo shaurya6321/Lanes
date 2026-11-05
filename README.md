@@ -66,7 +66,7 @@ In Claude Code, `/lanes-status` explains the current status, and `/lanes-handoff
 |---|---|---|
 | `SessionStart` | When a session starts, resumes, is cleared or is compacted | Adds a briefing of about 1,500 tokens or less: your lane, teammates, unread notices, your latest handoff, and the last 24 hours of summaries. |
 | `PreToolUse` | Before Edit, Write or NotebookEdit | Blocks edits outside your lane and tells Claude who owns the file and how to ask them. |
-| `PostToolUse` | After those same tools | If you changed a contract or hub file you own, writes a notice for higher-rank tasks only. |
+| `PostToolUse` | After those same tools | If you changed a contract or hub file you own, writes a notice for higher-rank tasks only. If the plan owner changed who owns what in `plan.yaml`, writes a plan notice for every affected task. |
 | `Stop` | At the end of each turn | Keeps a 3–5 line summary of the session in `.lanes/summaries/`. |
 | git `pre-commit` | On `git commit` | Runs the same lane check on staged files. This catches edits made through Bash, by other agents, or by hand. |
 

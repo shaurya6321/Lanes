@@ -12,9 +12,11 @@ Owner: shaurya · Implemented by: T1 · Used by: T2
 ## Rules
 - Hooks fail open, and the guard never returns "allow".
 - Notices go only to tasks with a higher rank.
+- Plan notices (`kind: plan`, with `base: <commit>`) go to every task whose `owns`/`uses`/`implements`/`owner`/`rank` the plan owner changed, whatever the rank. The plan owner is the top-level `owner:` (optional; default: the rank-1 task's owner).
 - Files in `.lanes/notices/` are written only by `lanes` commands and the hooks. The guard denies Edit/Write/NotebookEdit there; use `lanes notices amend` (author only, while unread).
 
 ## Change log
 <!-- Newest first, one line per change. Each edit to this file automatically notifies T2. -->
+- 2026-11-05: plan notices (`kind: plan`) and the optional plan `owner:` field.
 - 2026-11-05: added `lanes notices amend`; direct edits to `.lanes/notices/` are blocked.
 - 2026-11-05: first version (Phase 0).

@@ -6,7 +6,7 @@ Phase 0 deliberately leaves these out. Each line says which phase it belongs to 
 - **Codex adapter.** Fill in `from_codex()` in `lanes/hooks/adapters.py`, add `.codex/hooks.json` and `.codex/config.toml`, and generate `AGENTS.md`. The template already renders `AGENTS.md`. Re-check whether Codex PreToolUse sees file-patch edits; if it doesn't, the pre-commit check is the guard.
 - **Agent Mail.** Notices should arrive without a `git pull`. The `.lanes/notices/` file format stays, so Agent Mail can serve as an extra delivery path.
 - **Beads** for atomic task claims. In Phase 0, `status` in `plan.yaml` is edited by hand.
-- **Plan-change notices.** In Phase 0 anyone can edit `.lanes/plan.yaml`; the guard always allows `.lanes/`. Phase 1 should limit ownership edits to a plan owner, or send a notice whenever the plan changes.
+- **Enforce the plan owner.** Phase 0 sends plan notices for the plan owner's ownership edits and warns other editors, but anyone can still edit `.lanes/plan.yaml`. Phase 1 could block non-owners' `owns`/`uses` edits in the guard and the commit check. Hub file and contract owner changes don't send plan notices yet either.
 
 ## Phase 2 and later
 - `/lanes-plan`: the cohesion planner.
