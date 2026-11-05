@@ -5,6 +5,10 @@ recorded edits, and from files that became dirty since session start (which
 catches edits made through Bash). The "why" and "open" lines come from Claude's
 final reply (`last_assistant_message`). Stop fires after every turn, so the
 session's section is rewritten in place. This hook never blocks stopping.
+
+To keep churn low (a dirty summary file is what makes `git pull --rebase`
+refuse), a turn that made no edits since the last write leaves the summary
+alone, and a rewrite that would only change the timestamp is skipped.
 """
 
 from __future__ import annotations
@@ -16,7 +20,7 @@ from .. import gitutil
 from ..plan import Plan
 from ..summaries import derive_open, derive_why, has_section, render_section, upsert
 from .adapters import HookInput
-from .common import is_shared_lanes_state, load_ctx, load_state, run_hook
+from .common import is_shared_lanes_state, load_ctx, load_state, run_hook, save_state
 
 
 def main() -> int:
@@ -33,6 +37,10 @@ def handle(inp: HookInput) -> int:
     files = files_touched(ctx.root, inp.session_id)
     if not files and not has_section(ctx.root, inp.session_id):
         return 0  # a pure Q&A turn with nothing to report
+    state = load_state(ctx.root, inp.session_id)
+    fingerprint = [state.get("edits", 0), sorted(files)] if state is not None else None
+    if fingerprint is not None and state.get("summarized") == fingerprint and has_section(ctx.root, inp.session_id):
+        return 0  # no edits since the last summary: keep the "why" from the turn that did the work
     now = datetime.now(timezone.utc).replace(microsecond=0)
     section = render_section(
         member=ctx.member,
@@ -44,6 +52,9 @@ def handle(inp: HookInput) -> int:
         now=now,
     )
     upsert(ctx.root, ctx.member, inp.session_id, section, now)
+    if fingerprint is not None:
+        state["summarized"] = fingerprint
+        save_state(ctx.root, inp.session_id, state)
     return 0
 
 

@@ -115,6 +115,7 @@ def _record_touched(root, session_id: str | None, rels: list[str]) -> None:
     state = load_state(root, session_id) or {"touched": []}
     touched = list(dict.fromkeys([*state.get("touched", []), *keep]))
     state["touched"] = touched
+    state["edits"] = int(state.get("edits", 0)) + 1  # lets Stop tell an editing turn from a chat turn
     save_state(root, session_id, state)
 
 

@@ -336,9 +336,81 @@ def test_stop_writes_and_upserts_one_section_per_session(repo, clean_env):
     assert "src/api/cart/add.py" in text and "src/api/cart/bash_made.py" in text
     assert "- Open: Should totals include tax?" in text
 
+    run_hook("post_tool_notice", edit(repo, "src/api/cart/add.py", event="PostToolUse"), repo, clean_env)
     run_hook("stop_summary", stop(repo, "Also added tests."), repo, clean_env)
     text = files[0].read_text()
     assert text.count("lanes-session:abc123") == 1 and "Also added tests." in text
+
+
+def _summary_after_one_edit(repo, clean_env):
+    run_hook("session_start", payload("SessionStart", repo, source="startup"), repo, clean_env)
+    (repo / "src" / "api" / "cart").mkdir(parents=True)
+    (repo / "src" / "api" / "cart" / "add.py").write_text("x\n")
+    run_hook("post_tool_notice", edit(repo, "src/api/cart/add.py", event="PostToolUse"), repo, clean_env)
+    run_hook("stop_summary", stop(repo, "Added add() to the cart API."), repo, clean_env)
+    return next((repo / ".lanes" / "summaries").glob("*.md"))
+
+
+def test_chat_turns_after_work_leave_the_summary_untouched(repo, clean_env):
+    """Less churn: a reply with no edits must not rewrite (and re-dirty) the summary."""
+    path = _summary_after_one_edit(repo, clean_env)
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "-m", "summary committed")
+    for msg in ("Sure, here's how the cart works.", "You're welcome!"):
+        run_hook("stop_summary", stop(repo, msg), repo, clean_env)
+    assert git(repo, "status", "--porcelain", "--", ".lanes/summaries").strip() == ""
+    assert "- Why: Added add() to the cart API." in path.read_text()
+
+
+def test_same_content_is_not_rewritten_and_heading_time_is_kept(repo, clean_env):
+    from datetime import datetime, timedelta, timezone
+
+    from lanes.summaries import render_section, upsert
+
+    t0 = datetime(2026, 11, 5, 10, 0, tzinfo=timezone.utc)
+    sec = lambda now, why: render_section("shaurya", "s1", "T1", why, ["a.py"], "", now)  # noqa: E731
+    path = upsert(repo, "shaurya", "s1", sec(t0, "did a"), t0)
+    first = path.read_text()
+    upsert(repo, "shaurya", "s1", sec(t0 + timedelta(minutes=7), "did a"), t0 + timedelta(minutes=7))
+    assert path.read_text() == first  # only the time differed: no write
+    upsert(repo, "shaurya", "s1", sec(t0 + timedelta(minutes=9), "did b"), t0 + timedelta(minutes=9))
+    text = path.read_text()
+    assert "## 2026-11-05 10:00 UTC · shaurya · T1" in text and "updated:2026-11-05T10:09:00Z" in text and "did b" in text
+
+
+def test_dirty_summary_blocks_git_pull_rebase_but_not_lanes_sync(repo, clean_env, tmp_path, monkeypatch):
+    """The reported problem, reproduced: Stop leaves .lanes/summaries/ dirty, and a rebase pull refuses."""
+    from lanes.cli import main
+
+    origin = tmp_path / "origin.git"
+    subprocess.run(["git", "init", "-q", "--bare", "--initial-branch=main", str(origin)], check=True)
+    git(repo, "remote", "add", "origin", str(origin))
+    git(repo, "push", "-q", "-u", "origin", "main")
+    other = tmp_path / "other"
+    subprocess.run(["git", "clone", "-q", str(origin), str(other)], check=True)
+    git(other, "config", "user.email", "friend@example.com")
+    git(other, "config", "user.name", "friend")
+    (other / "teammate.txt").write_text("pushed by a teammate\n")
+    git(other, "add", "-A")
+    git(other, "commit", "-q", "-m", "teammate work")
+    git(other, "push", "-q")
+
+    _summary_after_one_edit(repo, clean_env)
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "-m", "my code + summary")  # the summary file is now tracked
+    (repo / "src" / "api" / "cart" / "add.py").write_text("y\n")  # next turn: another edit...
+    run_hook("post_tool_notice", edit(repo, "src/api/cart/add.py", event="PostToolUse"), repo, clean_env)
+    run_hook("stop_summary", stop(repo, "Fixed add()."), repo, clean_env)  # ...so Stop rewrites the summary
+    git(repo, "commit", "-q", "-m", "fix add", "--", "src")  # code committed; only the summary is dirty
+    dirty = git(repo, "status", "--porcelain").splitlines()
+    assert dirty and all(ln.startswith(" M .lanes/summaries/") for ln in dirty), dirty
+    pull = subprocess.run(["git", "pull", "--rebase"], cwd=repo, capture_output=True, text=True)
+    assert pull.returncode != 0 and "unstaged changes" in pull.stderr
+
+    monkeypatch.chdir(repo)
+    monkeypatch.setenv("LANES_USER", "shaurya")
+    assert main(["sync"]) == 3  # pulled fine; held back the code commit, as designed
+    assert (repo / "teammate.txt").exists()
 
 
 def test_stop_skips_pure_chat_turns(repo, clean_env):

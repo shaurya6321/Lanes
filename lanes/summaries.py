@@ -83,19 +83,31 @@ def render_section(member: str, session_id: str, task: str | None, why: str, fil
     return redact("\n".join(lines)) + "\n"
 
 
+def _content(block: list[str]) -> list[str]:
+    """A section without its heading time and `updated:` marker, for 'did anything change?'."""
+    heading = block[0].split(" UTC · ", 1)[-1] if block else ""
+    return [heading] + [ln for ln in block[1:] if not _MARKER.search(ln) and ln.strip()]
+
+
 def upsert(root: Path, member: str, session_id: str, section: str, now: datetime) -> Path:
+    """Insert or replace this session's section. Writes nothing if only the timestamp would change."""
     path = root / SUMMARIES_DIR / f"{member}-{now.strftime('%Y-%m-%d')}.md"
     path.parent.mkdir(parents=True, exist_ok=True)
     text = path.read_text(encoding="utf-8") if path.exists() else f"# Session summaries · {member} · {now.strftime('%Y-%m-%d')}\n"
     header, blocks = _header_and_blocks(text)
     marker = f"<!-- lanes-session:{session_id} "
+    new_block = section.rstrip("\n").splitlines()
     replaced = False
     for i, block in enumerate(blocks):
         if any(marker in ln for ln in block):
-            blocks[i] = section.rstrip("\n").splitlines()
+            if _content(block) == _content(new_block):
+                return path  # unchanged apart from the time: don't dirty the file
+            if " UTC · " in block[0]:  # keep the section's original start time in its heading
+                new_block = [block[0].split(" UTC · ", 1)[0] + " UTC · " + new_block[0].split(" UTC · ", 1)[-1], *new_block[1:]]
+            blocks[i] = new_block
             replaced = True
     if not replaced:
-        blocks.append(section.rstrip("\n").splitlines())
+        blocks.append(new_block)
     body = "\n\n".join("\n".join(b).rstrip() for b in blocks)
     path.write_text(header.rstrip() + "\n\n" + body + "\n", encoding="utf-8", newline="\n")
     return path
