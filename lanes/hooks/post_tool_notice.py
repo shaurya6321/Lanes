@@ -48,7 +48,8 @@ def handle(inp: HookInput) -> int:
                 f"Lanes: you changed {notice.topic}, so a change notice for {recipients} was written to {where}. "
                 "Now edit that file. Replace the auto-generated `summary:` line with one precise sentence, and make the "
                 "body 3–6 lines naming exactly what changed (renamed symbols, added or removed args, changed types). "
-                "Keep it under ~150 tokens with no secrets. Teammates see it after you commit and push."
+                "Keep it under ~150 tokens with no secrets. The notice is for your teammates: don't mark it read yourself. "
+                "They see it after you commit and push."
             )
         else:
             messages.append(f"Lanes: notice {where} was updated with this edit (to {recipients}). Make sure its summary still matches.")

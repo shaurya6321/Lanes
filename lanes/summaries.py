@@ -114,7 +114,8 @@ def _header_and_blocks(text: str) -> tuple[str, list[list[str]]]:
 # ---- deriving the "why" and open questions from Claude's last message --------------------
 
 _CODE_FENCE = re.compile(r"```.*?```", re.S)
-_MD = re.compile(r"[*_`#>]+")
+_LINE_PREFIX = re.compile(r"^(?:>\s*)+")  # block quotes, only at line start
+_EMPHASIS = re.compile(r"\*\*|__(?=\S)|(?<=\S)__|`")  # bold markers and backticks; keeps snake_case
 
 
 def _plain_lines(message: str) -> list[str]:
@@ -122,11 +123,12 @@ def _plain_lines(message: str) -> list[str]:
     lines = []
     for raw in text.splitlines():
         line = raw.strip()
-        if not line or line.startswith(("|", "<!--")) or set(line) <= set("-=|: "):
-            continue
+        if not line or line.startswith(("|", "<!--", "#")) or set(line) <= set("-=|: "):
+            continue  # tables, comments, headings and rules never carry the "why"
+        line = _LINE_PREFIX.sub("", line)
         line = re.sub(r"^([-*+]|\d+[.)])\s+", "", line)
         line = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", line)  # markdown links -> text
-        line = _MD.sub("", line).strip()
+        line = _EMPHASIS.sub("", line).strip()
         if line:
             lines.append(line)
     return lines
