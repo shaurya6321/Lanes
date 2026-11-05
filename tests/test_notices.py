@@ -123,3 +123,17 @@ def test_agent_edited_notice_with_invalid_yaml_is_still_read(repo):
 def test_unparseable_notice_is_reported_not_hidden(repo):
     (repo / ".lanes" / "notices" / "broken.md").write_text("no front matter at all\n")
     assert N.unreadable_notices(repo) == [".lanes/notices/broken.md"]
+
+
+def test_a_committed_notice_is_never_extended(repo):
+    from conftest import git
+
+    plan = load_plan(repo)
+    rel = ".lanes/contracts/cart-api.md"
+    own = plan.owner_of(rel)
+    first, _ = N.record_change(repo, plan, "shaurya", rel, own, ["+ a"], session="s1")
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "-m", "notice")
+    second, created = N.record_change(repo, plan, "shaurya", rel, own, ["+ b"], session="s1")
+    assert created and second.id != first.id
+    assert N.parse_notice(first.path).body == "+ a"

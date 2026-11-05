@@ -335,7 +335,7 @@ def record_change(
     change_lines: list[str],
     session: str | None = None,
 ) -> tuple[Notice | None, bool]:
-    """Create (or, within one session, extend) a change notice for a contract/hub edit.
+    """Create (or, within one session and until it's committed, extend) a change notice for a contract/hub edit.
 
     Returns (notice, created_new). Returns (None, False) when nobody downstream needs to know.
     """
@@ -352,7 +352,7 @@ def record_change(
     if session:
         for n in reversed(list_notices(root)):
             if n.session == session and n.kind == "change" and n.topic == (contract.id if contract else rel):
-                if not read_by_anyone(root, n.id):
+                if not read_by_anyone(root, n.id) and not _committed(root, n.path):
                     merged = [ln for ln in n.body.splitlines() if ln.strip()] + change_lines
                     n.body = "\n".join(merged[-MAX_BODY_LINES:])
                     n.to_tasks = sorted(set(n.to_tasks) | set(targets), key=lambda t: plan.task(t).rank if plan.task(t) else 0)
@@ -379,6 +379,15 @@ def record_change(
     )
     write_notice(root, notice)
     return notice, True
+
+
+def _committed(root: Path, path: Path | None) -> bool:
+    """Once a notice is committed it may already be on a teammate's machine: start a new one instead."""
+    if path is None:
+        return False
+    from .gitutil import run_git
+
+    return run_git(root, "cat-file", "-e", f"HEAD:{path.relative_to(root).as_posix()}") is not None
 
 
 def make_request(
