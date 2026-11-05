@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from .plan import Ownership, Plan
+from .runner import lanes_cmd
 
 
 @dataclass(frozen=True)
@@ -16,6 +17,7 @@ class LaneDecision:
 
 def check_lane(plan: Plan, member_id: str, rel_path: str) -> LaneDecision:
     own = plan.owner_of(rel_path)
+    L = lanes_cmd(plan.root)
     mine = ", ".join(t.id for t in plan.tasks_of(member_id)) or "no tasks"
 
     if own.kind == "lanes":
@@ -34,7 +36,7 @@ def check_lane(plan: Plan, member_id: str, rel_path: str) -> LaneDecision:
         reason = (
             f"Lanes lane guard: `{rel_path}` belongs to {own.owner} ({_describe(own)}). It is outside your lane "
             f"({member_id}: {mine}). Do not edit it. Instead ask the owner by running:\n"
-            f'  lanes request --file "{rel_path}" "<what you need changed and why>"\n'
+            f'  {L} request --file "{rel_path}" "<what you need changed and why>"\n'
             f"then continue with the parts of your task you can do inside your lane."
         )
     return LaneDecision(False, own, reason)
@@ -56,13 +58,14 @@ def check_edit(plan: Plan, member_id: str, rel_path: str) -> LaneDecision:
     notice can't be rewritten, deleted or marked read behind their back.
     """
     if is_notice_path(rel_path):
+        L = lanes_cmd(plan.root)
         return LaneDecision(
             False,
             plan.owner_of(rel_path),
             f"Lanes: `{rel_path}` is written only by Lanes, never edited directly. Use instead:\n"
-            f'  lanes request --file <path> "<what and why>"   ask an owner for a change\n'
-            f'  lanes notices amend <id> --summary "<one sentence>" [--body "<3-6 lines>"]   fix a notice you wrote\n'
-            f"  lanes notices --mark-read                       mark your notices read",
+            f'  {L} request --file <path> "<what and why>"   ask an owner for a change\n'
+            f'  {L} notices amend <id> --summary "<one sentence>" [--body "<3-6 lines>"]   fix a notice you wrote\n'
+            f"  {L} notices --mark-read                       mark your notices read",
         )
     return check_lane(plan, member_id, rel_path)
 

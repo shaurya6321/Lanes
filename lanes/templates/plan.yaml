@@ -14,6 +14,10 @@ members:
 hub_files:                  # shared files with exactly one owner
   - path: package.json
     owner: $member
+  - path: pyproject.toml      # Lanes is a dev dependency in repo-only installs
+    owner: $member
+  - path: uv.lock
+    owner: $member
   # Files created by `lanes init`. Whoever runs init owns them; change this if you like.
   - path: CLAUDE.md
     owner: $member

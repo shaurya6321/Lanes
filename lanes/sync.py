@@ -19,6 +19,8 @@ import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from .runner import lanes_cmd
+
 LANES = ".lanes"
 NET_TIMEOUT = 120
 
@@ -79,6 +81,7 @@ def is_lanes_only(files: list[str]) -> bool:
 
 def sync(root: Path, plan, member: str, include_code: bool = False) -> SyncResult:
     r = SyncResult()
+    L = lanes_cmd(root)
     branch = _out(root, "symbolic-ref", "--short", "-q", "HEAD")
     if not branch:
         return r.fail("lanes sync: HEAD is detached. Check out your branch first.")
@@ -110,7 +113,7 @@ def sync(root: Path, plan, member: str, include_code: bool = False) -> SyncResul
     if not upstream:
         return r.fail(
             f"Branch {branch} has no upstream, so nothing was pulled or pushed. "
-            f"Push it once with `git push -u origin {branch}`, then use `lanes sync`."
+            f"Push it once with `git push -u origin {branch}`, then use `{L} sync`."
         )
     remote = upstream.split("/", 1)[0]
     default = _out(root, "symbolic-ref", "--short", "-q", f"refs/remotes/{remote}/HEAD")
@@ -130,7 +133,7 @@ def sync(root: Path, plan, member: str, include_code: bool = False) -> SyncResul
             return r.fail(
                 "Pull stopped on a conflict, so it was undone and your branch is as it was. Conflicting files:\n"
                 + "\n".join(f"    {c}" for c in conflicts)
-                + f"\n  Resolve with `git pull --rebase --autostash` and fix those files, or ask whoever changed them, then run `lanes sync` again."
+                + f"\n  Resolve with `git pull --rebase --autostash` and fix those files, or ask whoever changed them, then run `{L} sync` again."
             )
         return r.fail("git pull failed:\n" + _tail(p))
     r.say(f"Pulled {upstream}.")
@@ -145,12 +148,12 @@ def sync(root: Path, plan, member: str, include_code: bool = False) -> SyncResul
         r.say(f"Not pushed: {len(code)} of {len(pending)} unpushed commit(s) contain code:")
         for sha, subject, files in code:
             r.say(f"    {sha[:8]} {subject} ({len(files)} file(s))")
-        r.say("  Run `lanes sync --include-code` to push them along with .lanes/, or `git push` yourself.")
+        r.say(f"  Run `{L} sync --include-code` to push them along with .lanes/, or `git push` yourself.")
         r.code = 3
         return r
     p = _git(root, "push", "--quiet", timeout=NET_TIMEOUT)
     if p.returncode != 0:
-        return r.fail("git push failed (if someone pushed meanwhile, run `lanes sync` again):\n" + _tail(p))
+        return r.fail(f"git push failed (if someone pushed meanwhile, run `{L} sync` again):\n" + _tail(p))
     kinds = "including code" if code else ".lanes/ only"
     r.say(f"Pushed {len(pending)} commit(s) to {upstream} ({kinds}).")
     return r

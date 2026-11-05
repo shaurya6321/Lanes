@@ -14,6 +14,7 @@ from ..notices import describe_change, record_change
 from ..paths import PLAN_FILE, repo_relative
 from ..plandiff import ownership_changed, record_plan_change
 from ..redact import is_env_file
+from ..runner import lanes_cmd
 from .adapters import HookInput, add_context
 from .common import is_shared_lanes_state, load_ctx, load_state, run_hook, save_state
 
@@ -34,6 +35,7 @@ def handle(inp: HookInput) -> int:
     if ctx.member is None:
         return 0
 
+    L = lanes_cmd(ctx.root)
     messages: list[str] = []
     for rel in rels:
         if is_env_file(rel):
@@ -53,15 +55,15 @@ def handle(inp: HookInput) -> int:
             messages.append(
                 f"Lanes: you changed {notice.topic}, so a change notice for {recipients} was written to {where}. "
                 "Now replace its auto-generated summary (don't edit the file; Lanes blocks that). Run:\n"
-                f'  lanes notices amend {notice.id} --summary "<one precise sentence>" --body "<line 1>\\n<line 2>..."\n'
+                f'  {L} notices amend {notice.id} --summary "<one precise sentence>" --body "<line 1>\\n<line 2>..."\n'
                 "The body is 3–6 lines naming exactly what changed (renamed symbols, added or removed args, changed types), "
                 "under ~150 tokens, no secrets. The notice is for your teammates: don't mark it read yourself. "
-                "They see it after `lanes sync` (suggest it to your human when you finish)."
+                f"They see it after `{L} sync` (suggest it to your human when you finish)."
             )
         else:
             messages.append(
                 f"Lanes: notice {where} was updated with this edit (to {recipients}). If its summary no longer matches, "
-                f'run `lanes notices amend {notice.id} --summary "..."`.'
+                f'run `{L} notices amend {notice.id} --summary "..."`.'
             )
     if messages:
         add_context("PostToolUse", "\n".join(messages), agent=inp.agent)
@@ -70,6 +72,7 @@ def handle(inp: HookInput) -> int:
 
 def _plan_messages(ctx, session_id: str | None) -> list[str]:
     plan, member = ctx.plan, ctx.member
+    L = lanes_cmd(ctx.root)
     if member != plan.owner:
         if ownership_changed(ctx.root, plan, member):
             return [
@@ -85,8 +88,8 @@ def _plan_messages(ctx, session_id: str | None) -> list[str]:
     verb = "written to" if created else "updated in"
     return [
         f"Lanes: you changed task ownership in the plan, so a plan notice for {who} was {verb} {where}. "
-        f"It lists every change since the last commit and goes out with the next `lanes sync`. "
-        f'To replace its auto-generated summary, run `lanes notices amend {notice.id} --summary "..."`.'
+        f"It lists every change since the last commit and goes out with the next `{L} sync`. "
+        f'To replace its auto-generated summary, run `{L} notices amend {notice.id} --summary "..."`.'
     ]
 
 

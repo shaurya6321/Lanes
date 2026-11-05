@@ -13,6 +13,7 @@ from pathlib import Path
 from string import Template
 
 from . import gitutil
+from .runner import DEV, GLOBAL, LOCAL, RUNNERS, prefix_for
 
 HOOK_MATCHER = "Edit|Write|MultiEdit|NotebookEdit"
 # (event, matcher or None, hook name, module file, timeout seconds)
@@ -28,12 +29,12 @@ GIT_HOOK_MARKER = "# lanes:pre-commit"
 
 AGENT_HINTS = {
     "claude": {
-        "briefing_hint": "Lanes adds it to your context automatically when the session starts. If you don't see it, run `lanes status` and `lanes notices`.",
+        "briefing_hint": "Lanes adds it to your context automatically when the session starts. If you don't see it, run `$lanes status` and `$lanes notices`.",
         "handoff_hint": "To hand off to whoever continues, run `/lanes-handoff`.",
     },
     "codex": {
-        "briefing_hint": "Run `lanes status` and `lanes notices` at the start of every session. Automatic briefings for Codex come in Phase 1.",
-        "handoff_hint": "To hand off, run `lanes handoff` and fill in the file it creates.",
+        "briefing_hint": "Run `$lanes status` and `$lanes notices` at the start of every session. Automatic briefings for Codex come in Phase 1.",
+        "handoff_hint": "To hand off, run `$lanes handoff` and fill in the file it creates.",
     },
 }
 
@@ -50,6 +51,23 @@ else
 fi
 """
 
+# Repo-only installs (`lanes init --local`): Lanes is a dev dependency, run through uv.
+# The `--version` probe keeps the hook fail-open when the env isn't synced yet: a
+# missing `lanes` must skip the check, not block the commit.
+GIT_HOOK_LOCAL = f"""#!/bin/sh
+{GIT_HOOK_MARKER} (installed by `uv run lanes init --local`): blocks commits that touch files outside your lane.
+# Bypass once with: git commit --no-verify
+top="$(git rev-parse --show-toplevel)"
+if command -v uv >/dev/null 2>&1 && uv run --quiet --project "$top" lanes --version >/dev/null 2>&1; then
+  exec uv run --quiet --project "$top" lanes hook pre-commit
+elif command -v lanes >/dev/null 2>&1; then
+  exec lanes hook pre-commit
+else
+  echo "lanes: can't run Lanes (run 'uv sync' first), so the lane check was skipped" >&2
+  exit 0
+fi
+"""
+
 
 @dataclass
 class Report:
@@ -57,6 +75,7 @@ class Report:
     updated: list[str] = field(default_factory=list)
     unchanged: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+    runner: str = GLOBAL
 
     def add(self, status: str, what: str) -> None:
         {"created": self.created, "updated": self.updated}.get(status, self.unchanged).append(what)
@@ -83,8 +102,9 @@ def _write_new(path: Path, text: str, report: Report, rel: str, force: bool = Fa
 # ---- agent instruction files ---------------------------------------------------------
 
 
-def agent_block(agent: str) -> str:
-    return render("agent_instructions.md", **AGENT_HINTS[agent]).strip() + "\n"
+def agent_block(agent: str, runner: str = GLOBAL) -> str:
+    hints = {k: Template(v).safe_substitute(lanes=prefix_for(runner)) for k, v in AGENT_HINTS[agent].items()}
+    return render("agent_instructions.md", lanes=prefix_for(runner), **hints).strip() + "\n"
 
 
 def upsert_block(path: Path, block: str) -> str:
@@ -105,8 +125,13 @@ def upsert_block(path: Path, block: str) -> str:
 
 
 def hook_handler(name: str, module_file: str, timeout: int, runner: str) -> dict:
-    if runner == "uv-dev":  # only for the Lanes repo itself: run the in-repo wrappers
+    # Exec form (`command` + `args`, no shell): Claude Code substitutes ${CLAUDE_PROJECT_DIR}
+    # inside an arg and passes it as ONE argv entry, so a path with spaces needs no quoting
+    # (shell quotes here would be passed literally). See docs/HOOKS_NOTES.md.
+    if runner == DEV:  # only for the Lanes repo itself: run the in-repo wrappers
         cmd, args = "uv", ["run", "--quiet", "--project", "${CLAUDE_PROJECT_DIR}", "python", f"${{CLAUDE_PROJECT_DIR}}/hooks/{module_file}"]
+    elif runner == LOCAL:  # Lanes is a dev dependency of the repo; nothing on PATH
+        cmd, args = "uv", ["run", "--quiet", "--project", "${CLAUDE_PROJECT_DIR}", "lanes", "hook", name]
     else:
         cmd, args = "lanes", ["hook", name]
     return {"type": "command", "command": cmd, "args": args, "timeout": timeout}
@@ -118,7 +143,25 @@ def _is_ours(handler: dict, name: str, module_file: str) -> bool:
     return f"hook {name}" in joined or joined.endswith(f"hooks/{module_file}")
 
 
-def merge_settings(path: Path, runner: str = "lanes") -> str:
+def detect_runner(root: Path) -> str | None:
+    """Which runner the repo's committed .claude/settings.json already uses (None if no Lanes hooks)."""
+    try:
+        settings = json.loads((root / ".claude" / "settings.json").read_text(encoding="utf-8") or "{}")
+    except (OSError, ValueError):
+        return None
+    for groups in (settings.get("hooks") or {}).values():
+        for group in groups if isinstance(groups, list) else []:
+            for h in group.get("hooks", []) if isinstance(group, dict) else []:
+                for _event, _m, name, module_file, _t in HOOKS:
+                    if isinstance(h, dict) and _is_ours(h, name, module_file):
+                        args = [str(a) for a in h.get("args") or []]
+                        if h.get("command") == "uv" and any(a.endswith(f"hooks/{module_file}") for a in args):
+                            return DEV
+                        return LOCAL if h.get("command") == "uv" else GLOBAL
+    return None
+
+
+def merge_settings(path: Path, runner: str = GLOBAL) -> str:
     if path.exists():
         try:
             settings = json.loads(path.read_text(encoding="utf-8") or "{}")
@@ -153,7 +196,7 @@ def merge_settings(path: Path, runner: str = "lanes") -> str:
 # ---- git -----------------------------------------------------------------------------
 
 
-def install_git_hook(root: Path) -> tuple[str, str | None]:
+def install_git_hook(root: Path, runner: str = GLOBAL) -> tuple[str, str | None]:
     hooks_dir = gitutil.git_path(root, "hooks")
     if hooks_dir is None:
         return "skipped", "not a git repository, so the pre-commit lane check was not installed"
@@ -163,9 +206,10 @@ def install_git_hook(root: Path) -> tuple[str, str | None]:
             f"{path} already exists and isn't from Lanes. Add this line to it to enable the lane check: "
             "lanes hook pre-commit"
         )
-    status = "unchanged" if path.exists() and path.read_text(encoding="utf-8") == GIT_HOOK else ("updated" if path.exists() else "created")
+    text = GIT_HOOK_LOCAL if runner == LOCAL else GIT_HOOK
+    status = "unchanged" if path.exists() and path.read_text(encoding="utf-8") == text else ("updated" if path.exists() else "created")
     hooks_dir.mkdir(parents=True, exist_ok=True)
-    path.write_text(GIT_HOOK, encoding="utf-8", newline="\n")
+    path.write_text(text, encoding="utf-8", newline="\n")
     path.chmod(path.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
     return status, None
 
@@ -199,9 +243,19 @@ def init_repo(
     email: str | None = None,
     force_plan: bool = False,
     git_hook: bool = True,
-    runner: str = "lanes",
+    runner: str | None = None,
 ) -> Report:
+    """Set up (or re-check) a repo. `runner=None` keeps whatever the repo already uses, else global."""
     report = Report()
+    existing = detect_runner(root)
+    if runner is None:
+        runner = existing or GLOBAL
+    elif runner not in RUNNERS:
+        raise ValueError(f"unknown runner {runner!r}")
+    elif existing and existing != runner:
+        report.warnings.append(f"switching this repo's hooks from {existing!r} to {runner!r}; commit .claude/settings.json and CLAUDE.md")
+    report.runner = runner
+    L = prefix_for(runner)
     if member is None:
         member, email = default_member()
     lanes = root / ".lanes"
@@ -227,19 +281,33 @@ def init_repo(
     report.add(ensure_line(root / ".gitattributes", ".lanes/** text eol=lf"), ".gitattributes (.lanes/** eol=lf)")
 
     for agent, fname in (("claude", "CLAUDE.md"), ("codex", "AGENTS.md")):
-        report.add(upsert_block(root / fname, agent_block(agent)), fname)
+        report.add(upsert_block(root / fname, agent_block(agent, runner)), fname)
 
     try:
         report.add(merge_settings(root / ".claude" / "settings.json", runner), ".claude/settings.json (hooks)")
     except ValueError as exc:
         report.warnings.append(str(exc))
     for cmd in ("lanes-status.md", "lanes-handoff.md"):
-        _write_new(root / ".claude" / "commands" / cmd, template(f"commands/{cmd}"), report, f".claude/commands/{cmd}")
+        _write_new(root / ".claude" / "commands" / cmd, render(f"commands/{cmd}", lanes=L), report, f".claude/commands/{cmd}")
+
+    if runner == LOCAL and not _declares_lanes(root / "pyproject.toml"):
+        report.warnings.append(
+            "pyproject.toml doesn't list Lanes as a dependency, so `uv run lanes` won't work for teammates. Add it with:\n"
+            '              uv add --dev "lanes @ git+https://github.com/shaurya6321/Lanes"'
+        )
 
     if git_hook:
-        status, warning = install_git_hook(root)
+        status, warning = install_git_hook(root, runner)
         if warning:
             report.warnings.append(warning)
         else:
             report.add(status, ".git/hooks/pre-commit (lane check)")
     return report
+
+
+def _declares_lanes(pyproject: Path) -> bool:
+    try:
+        text = pyproject.read_text(encoding="utf-8")
+    except OSError:
+        return False
+    return re.search(r"""["']lanes\s*(@|[<>=~!\[;"']|$)""", text, re.M) is not None

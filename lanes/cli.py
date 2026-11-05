@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from . import __version__
+from .runner import lanes_cmd, prefix_for
 
 EXIT_OK, EXIT_ERROR, EXIT_OUT_OF_LANE = 0, 1, 2  # `sync` also returns 3: code commits held back
 
@@ -68,7 +69,12 @@ def cmd_init(args) -> int:
     from .install import init_repo
 
     root = gitutil.toplevel(Path.cwd()) or Path.cwd()
-    report = init_repo(root, member=args.member, email=args.email, force_plan=args.force, git_hook=not args.no_git_hook)
+    runner = "uv-local" if args.local else ("lanes" if args.use_global else None)
+    try:
+        report = init_repo(root, member=args.member, email=args.email, force_plan=args.force, git_hook=not args.no_git_hook, runner=runner)
+    except ValueError as exc:
+        raise CliError(str(exc)) from exc
+    L = prefix_for(report.runner)
     print(f"Lanes initialized in {root}")
     for label, items in (("created", report.created), ("updated", report.updated), ("unchanged", report.unchanged)):
         for item in items:
@@ -76,11 +82,11 @@ def cmd_init(args) -> int:
     for w in report.warnings:
         print(f"  warning   {w}")
     print(
-        "\nNext:\n"
+        f"\nNext ({'repo-only: Lanes runs from this repo through uv' if report.runner == 'uv-local' else 'Lanes runs from your PATH'}):\n"
         "  1. Edit .lanes/plan.yaml: real members, tasks, owned globs, contracts.\n"
         "  2. Each teammate is matched by `git config user.email` (or sets LANES_USER to their member id).\n"
-        "  3. Commit and push .lanes/, CLAUDE.md, AGENTS.md and .claude/. After that, `lanes sync` shares .lanes/.\n"
-        "  4. Teammates run `lanes init` once in their clone to install the commit check.\n"
+        f"  3. Commit and push .lanes/, CLAUDE.md, AGENTS.md and .claude/. After that, `{L} sync` shares .lanes/.\n"
+        f"  4. Teammates run {'`uv sync`, then ' if report.runner == 'uv-local' else ''}`{L} init` once in their clone to install the commit check.\n"
         "  5. Start a new Claude Code session; the Lanes briefing appears at the top.\n"
         "Setup guide: https://github.com/shaurya6321/Lanes/blob/main/docs/SETUP.md"
     )
@@ -142,7 +148,7 @@ def cmd_status(args) -> int:
             print("\nWarning: uncommitted changes outside your lane:")
             for line in outside:
                 print(f"  {line}")
-            print("  Ask the owner (`lanes request --file <path> ...`) or move the change to your lane.")
+            print(f"  Ask the owner (`{lanes_cmd(ctx.root)} request --file <path> ...`) or move the change to your lane.")
     return EXIT_OK
 
 
@@ -207,7 +213,7 @@ def cmd_notices(args) -> int:
     if args.mark_read is not None:
         ids = args.mark_read or [n.id for n in shown]
         n = mark_read(ctx.root, ctx.member, ids)
-        print(f"Marked {n} notice(s) read for {ctx.member}. Run `lanes sync` to share it.")
+        print(f"Marked {n} notice(s) read for {ctx.member}. Run `{lanes_cmd(ctx.root)} sync` to share it.")
         return EXIT_OK
 
     if not shown:
@@ -220,7 +226,7 @@ def cmd_notices(args) -> int:
         print(f"  {n.summary}")
         for line in n.body.splitlines():
             print(f"    {line}")
-    print(f"\nAfter acting on these: lanes notices --mark-read")
+    print(f"\nAfter acting on these: {lanes_cmd(ctx.root)} notices --mark-read")
     return EXIT_OK
 
 
@@ -236,7 +242,7 @@ def cmd_request(args) -> int:
     except ValueError as exc:
         raise CliError(str(exc)) from exc
     print(f"Request written: {notice.path.relative_to(ctx.root).as_posix()} (to {', '.join(notice.to_members)})")
-    print("Run `lanes sync` so the owner sees it in their next session.")
+    print(f"Run `{lanes_cmd(ctx.root)} sync` so the owner sees it in their next session.")
     return EXIT_OK
 
 
@@ -300,6 +306,9 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--email", help="your email for the example plan (default: git user.email)")
     s.add_argument("--force", action="store_true", help="overwrite an existing .lanes/plan.yaml with the example")
     s.add_argument("--no-git-hook", action="store_true", help="don't install the git pre-commit lane check")
+    mode = s.add_mutually_exclusive_group()
+    mode.add_argument("--local", action="store_true", help="repo-only: hooks and the git hook run `uv run lanes ...` (Lanes is a dev dependency)")
+    mode.add_argument("--global", dest="use_global", action="store_true", help="hooks run `lanes ...` from PATH (default for new repos)")
     s.set_defaults(func=cmd_init)
 
     sub.add_parser("whoami", help="your member id, tasks and owned globs").set_defaults(func=cmd_whoami)

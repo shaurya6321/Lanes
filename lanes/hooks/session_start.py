@@ -14,6 +14,7 @@ from pathlib import Path
 from .. import gitutil
 from ..notices import unread_for
 from ..plan import Plan
+from ..runner import lanes_cmd
 from ..summaries import read_sections
 from .adapters import HookInput, add_context
 from .common import is_shared_lanes_state, load_ctx, load_state, run_hook, save_state
@@ -73,7 +74,8 @@ def build_briefing(
     exclude_session: str | None = None,
     cap: int = CAP_CHARS,
 ) -> tuple[str, dict]:
-    fixed = _fixed_part(plan, member, identity_detail)
+    L = lanes_cmd(root)
+    fixed = _fixed_part(plan, member, identity_detail, L)
 
     # Optional, time-stamped items: (timestamp, section, text). Newest are kept first.
     items: list[tuple[datetime, str, str]] = []
@@ -91,9 +93,9 @@ def build_briefing(
             items.append((s.updated, "summaries", "\n".join(s.lines[:5]).replace("## ", "- ", 1)))
 
     footer = (
-        "\nAfter acting on notices, run `lanes notices --mark-read`. Notices, summaries and handoffs reach teammates "
-        "only through git: when you finish, suggest your human run `lanes sync` (commits .lanes/ only, pulls, pushes). "
-        "Run `lanes status` any time to see who owns what."
+        f"\nAfter acting on notices, run `{L} notices --mark-read`. Notices, summaries and handoffs reach teammates "
+        f"only through git: when you finish, suggest your human run `{L} sync` (commits .lanes/ only, pulls, pushes). "
+        f"Run `{L} status` any time to see who owns what."
     )
     budget = cap - len(fixed) - len(footer) - 200
     kept: list[tuple[datetime, str, str]] = []
@@ -119,17 +121,17 @@ def build_briefing(
             ordered = sorted(chosen, key=lambda x: x[0], reverse=(section == "notices"))
             parts.extend(i[2] for i in ordered)
     if omitted:
-        parts.append(f"({omitted} older item(s) omitted to stay short. See `lanes notices` and .lanes/summaries/.)")
+        parts.append(f"({omitted} older item(s) omitted to stay short. See `{L} notices` and .lanes/summaries/.)")
     text = "\n".join(parts) + footer
     return text[:cap], {"notices": len(notices), "omitted": omitted}
 
 
-def _fixed_part(plan: Plan, member: str | None, identity_detail: str) -> str:
+def _fixed_part(plan: Plan, member: str | None, identity_detail: str, L: str = "lanes") -> str:
     lines = [f"# Lanes briefing · feature: {plan.feature}"]
     if member is None:
         lines += [
             f"WARNING: Lanes can't tell who you are ({identity_detail}).",
-            "The lane guard is OFF until this is fixed. Tell the user, and don't edit files without checking `lanes status`.",
+            f"The lane guard is OFF until this is fixed. Tell the user, and don't edit files without checking `{L} status`.",
         ]
     else:
         lines.append(f"You are **{member}** ({identity_detail}). Stay inside your lane (see 'Working with Lanes' in CLAUDE.md).")
@@ -148,7 +150,7 @@ def _fixed_part(plan: Plan, member: str | None, identity_detail: str) -> str:
         hubs = [h.path for h in plan.hub_files if h.owner == member]
         if hubs:
             lines.append(f"- Hub files you own: {', '.join(hubs)}")
-        lines.append('Need a change outside these paths? Run `lanes request --file <path> "<what and why>"`; don\'t edit it.')
+        lines.append(f'Need a change outside these paths? Run `{L} request --file <path> "<what and why>"`; don\'t edit it.')
 
     others = [t for t in plan.tasks_by_rank() if t.owner != member and t.status != "done"]
     if others:
