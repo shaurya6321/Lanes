@@ -1,0 +1,50 @@
+# Lanes applied to building Lanes itself. Spec: docs/PLAN_FORMAT.md
+# Before your teammate starts: replace `friend` with their id and email
+# (they set LANES_USER to that id), then commit and push.
+feature: lanes-phase0
+updated: 2026-11-05
+members:
+  - id: shaurya
+    email: 69804169+shaurya6321@users.noreply.github.com
+  - id: friend
+    email: friend@example.com
+hub_files:                       # shared files with exactly one owner
+  - path: pyproject.toml
+    owner: shaurya
+  - path: uv.lock
+    owner: shaurya
+  - path: .python-version
+    owner: shaurya
+  - path: .claude/**
+    owner: shaurya
+  - path: CLAUDE.md
+    owner: shaurya
+  - path: AGENTS.md
+    owner: shaurya
+  - path: .gitignore
+    owner: shaurya
+  - path: .gitattributes
+    owner: shaurya
+  - path: LICENSE
+    owner: shaurya
+contracts:
+  - id: lanes-interface          # CLI commands, exit codes, plan schema, .lanes/ file formats
+    file: .lanes/contracts/lanes-interface.md
+    owner: shaurya
+tasks:
+  - id: T1
+    title: Core CLI + hooks (Phase 0)
+    rank: 1
+    owner: shaurya
+    owns: ["lanes/**", "hooks/**", "tests/**", "README.md", "docs/**"]
+    implements: [lanes-interface]
+    depends_on: []
+    status: in_progress
+  - id: T2
+    title: Phase 0 gate on Windows, setup guide and e2e script
+    rank: 2
+    owner: friend
+    owns: ["docs/SETUP.md", "tests/e2e_phase0.md"]
+    uses: [lanes-interface]
+    depends_on: [T1]
+    status: todo
