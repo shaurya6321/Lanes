@@ -53,7 +53,7 @@ To check it's working, run `uv run lanes whoami` (your tasks and owned files) an
 |---|---|
 | `lanes init` | Creates `.lanes/`, adds the agent instructions, registers the Claude Code hooks, and installs the git pre-commit lane check. It's safe to re-run. |
 | `lanes whoami` | Shows your member id, tasks, owned globs and contracts. |
-| `lanes status` | Shows a table of tasks, owners and statuses, unread notices per person, and a warning for any uncommitted change outside your lane. |
+| `lanes status` | Shows a table of tasks, owners and statuses, unread notices per person, and warnings for tasks whose `owns` globs overlap and for any uncommitted change outside your lane. |
 | `lanes check PATH…` | Exits 0 if the path is in your lane and 2 if not, with the reason. `--staged` checks the files a commit would touch. |
 | `lanes notices` | Lists unread notices addressed to you. Use `--mark-read` once you've acted on them, or `--all` to include ones already read. |
 | `lanes notices amend ID --summary "…"` | Rewrites the summary (and `--body`) of a notice you wrote, as long as nobody has read it yet. Files in `.lanes/notices/` are never edited directly; the guard blocks that. |

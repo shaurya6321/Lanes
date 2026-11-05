@@ -138,6 +138,13 @@ def cmd_status(args) -> int:
     if broken:
         print(f"Warning: {len(broken)} notice file(s) could not be read (fix the front matter): {', '.join(broken)}")
 
+    overlaps = plan.owns_overlaps()
+    if overlaps:
+        print("\nWarning: overlapping `owns` globs between tasks (where both match, one task wins):")
+        for o in overlaps:
+            print(f"  {o.a.id} {o.a_glob} and {o.b.id} {o.b_glob}: {o.winner.id} wins ({o.reason})")
+        print("  If that's intended, nothing to do. Otherwise ask the plan owner to narrow one of the globs.")
+
     if ctx.member:
         outside = []
         for rel in gitutil.dirty_paths(ctx.root):

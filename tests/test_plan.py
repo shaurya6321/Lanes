@@ -1,4 +1,5 @@
 import pytest
+from conftest import REPO
 
 from lanes.identity import resolve
 from lanes.lane import check_lane
@@ -87,6 +88,47 @@ def test_most_specific_pattern_wins(plan_dict):
     plan = parse_plan(plan_dict)
     assert plan.owner_of("tests/test_x.py").owner == "shaurya"
     assert plan.owner_of("tests/e2e_phase0.md").owner == "friend"
+
+
+def test_nested_glob_belongs_to_the_more_specific_task(plan_dict):
+    plan_dict["tasks"][0]["owns"].append("tests/**")  # T1, rank 1
+    plan_dict["tasks"][1]["owns"].append("tests/e2e_results/**")  # T2, rank 2
+    plan = parse_plan(plan_dict)
+    own = plan.owner_of("tests/e2e_results/x.md")
+    assert (own.kind, own.owner, own.task.id) == ("task", "friend", "T2")
+    assert plan.owner_of("tests/test_x.py").task.id == "T1"
+    assert check_lane(plan, "friend", "tests/e2e_results/x.md").allowed
+    assert not check_lane(plan, "shaurya", "tests/e2e_results/x.md").allowed
+
+
+def test_this_repos_plan_gives_e2e_results_to_t2():
+    plan = load_plan(REPO)
+    own = plan.owner_of("tests/e2e_results/x.md")
+    assert own.kind == "task" and own.task.id == "T2"
+    assert plan.owner_of("tests/test_plan.py").task.id == "T1"
+
+
+def test_owns_overlaps(plan_dict):
+    plan_dict["tasks"][0]["owns"].append("tests/**")
+    plan_dict["tasks"][1]["owns"].append("tests/e2e_results/**")
+    plan_dict["tasks"][1]["owns"].append("src/emails/templates/*.html")  # inside T3's src/emails/**
+    overlaps = {(o.a.id, o.a_glob, o.b.id, o.b_glob): (o.winner.id, o.reason) for o in parse_plan(plan_dict).owns_overlaps()}
+    assert overlaps == {
+        ("T1", "tests/**", "T2", "tests/e2e_results/**"): ("T2", "more specific"),
+        ("T2", "src/emails/templates/*.html", "T3", "src/emails/**"): ("T2", "more specific"),
+    }
+
+
+def test_equally_specific_globs_go_to_the_lower_rank(plan_dict):
+    plan_dict["tasks"][2]["owns"].append("src/pages/checkout/*")  # T3 (rank 3); same literal prefix as T2's glob
+    plan = parse_plan(plan_dict)
+    [o] = plan.owns_overlaps()
+    assert (o.winner.id, o.reason) == ("T2", "lower rank")
+    assert plan.owner_of("src/pages/checkout/x.tsx").task.id == "T2"
+
+
+def test_no_overlaps_in_the_fixture_plan(repo):
+    assert load_plan(repo).owns_overlaps() == []
 
 
 def test_check_lane_messages(repo):

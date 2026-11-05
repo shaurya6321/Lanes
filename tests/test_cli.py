@@ -3,7 +3,7 @@ import subprocess
 
 import pytest
 import yaml
-from conftest import git
+from conftest import git, write_plan
 
 from lanes.cli import main
 from lanes.install import GIT_HOOK_MARKER, init_repo
@@ -47,6 +47,20 @@ def test_status_warns_about_out_of_lane_changes(in_repo, capsys):
     (in_repo / "src" / "pages" / "checkout" / "x.tsx").write_text("x")
     code, out = run(capsys, "status")
     assert "outside your lane" in out and "src/pages/checkout/x.tsx (owned by friend)" in out
+
+
+def test_status_warns_about_overlapping_owns(in_repo, capsys, plan_dict):
+    plan_dict["tasks"][0]["owns"].append("tests/**")
+    plan_dict["tasks"][1]["owns"].append("tests/e2e_results/**")
+    write_plan(in_repo, plan_dict)
+    code, out = run(capsys, "status")
+    assert code == 0 and "overlapping `owns` globs" in out
+    assert "T1 tests/** and T2 tests/e2e_results/**: T2 wins (more specific)" in out
+
+
+def test_status_has_no_overlap_warning_for_disjoint_globs(in_repo, capsys):
+    code, out = run(capsys, "status")
+    assert code == 0 and "overlapping" not in out
 
 
 @pytest.mark.parametrize(

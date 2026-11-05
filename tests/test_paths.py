@@ -1,6 +1,6 @@
 import pytest
 
-from lanes.paths import find_root, glob_match, repo_relative, specificity, to_posix
+from lanes.paths import find_root, glob_match, globs_overlap, repo_relative, specificity, to_posix
 
 
 @pytest.mark.parametrize(
@@ -75,3 +75,28 @@ def test_find_root(tmp_path):
     deep.mkdir(parents=True)
     assert find_root(deep) == tmp_path
     assert find_root(tmp_path.parent / "nowhere-lanes-xyz") is None or True  # no crash on missing dirs
+
+
+@pytest.mark.parametrize(
+    "a, b, overlap, witness",
+    [
+        ("tests/**", "tests/e2e_results/**", True, "tests/e2e_results/x.md"),
+        ("lanes/**", "hooks/**", False, None),
+        ("docs", "docs/x.md", True, "docs/x.md"),  # a plain path covers everything below it
+        ("docs", "docsite/**", False, None),
+        ("src/*.py", "src/a*", True, "src/a.py"),
+        ("src/*.py", "src/**/*.ts", False, None),
+        ("src/*.py", "src/a/b.py", False, None),  # `*` stays inside one directory
+        ("src/*/x.py", "src/a/**", True, "src/a/x.py"),
+        ("**/*.md", "README.md", True, "README.md"),
+        ("src/**/test_*.py", "src/api/**", True, "src/api/test_a.py"),
+        ("a?c", "abc", True, "abc"),
+        ("a?c", "a/c", False, None),
+        ("src/", "src/x/y.ts", True, "src/x/y.ts"),
+    ],
+)
+def test_globs_overlap(a, b, overlap, witness):
+    assert globs_overlap(a, b) is overlap
+    assert globs_overlap(b, a) is overlap
+    if witness:  # the overlap is real: one path matches both
+        assert glob_match(a, witness) and glob_match(b, witness)

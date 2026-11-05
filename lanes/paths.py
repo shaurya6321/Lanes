@@ -133,3 +133,94 @@ def specificity(pattern: str) -> tuple[int, int]:
             break
         prefix += 1
     return prefix, sum(1 for ch in pat if ch not in _WILDCARDS)
+
+
+# ----------------------------------------------------------------------------
+# Glob overlap: could some path match both patterns? Each pattern becomes a
+# small NFA with the same semantics as `_compile`, and we search their product.
+# ----------------------------------------------------------------------------
+
+_ANY, _NONSLASH = "<any>", "<nonslash>"  # edge labels; literal labels are single chars
+
+
+@lru_cache(maxsize=512)
+def _nfa(pattern: str) -> tuple[tuple[tuple[tuple[str, int], ...], ...], tuple[tuple[int, ...], ...], frozenset[int]]:
+    """(edges, epsilon moves, accepting states) per state; state 0 is the start."""
+    pat = _clean_pattern(pattern)
+    edges: list[list[tuple[str, int]]] = []
+    eps: list[list[int]] = []
+
+    def new() -> int:
+        edges.append([])
+        eps.append([])
+        return len(edges) - 1
+
+    s = new()
+    i = 0
+    while i < len(pat):
+        if pat.startswith("**/", i):  # (?:.*/)?
+            end, loop = new(), new()
+            eps[s] += [end, loop]
+            edges[loop] += [(_ANY, loop), ("/", end)]
+            s, i = end, i + 3
+            continue
+        nxt = new()
+        if pat.startswith("**", i):  # .*
+            edges[s].append((_ANY, s))
+            eps[s].append(nxt)
+            i += 2
+        elif pat[i] == "*":  # [^/]*
+            edges[s].append((_NONSLASH, s))
+            eps[s].append(nxt)
+            i += 1
+        else:
+            edges[s].append((_NONSLASH if pat[i] == "?" else pat[i], nxt))
+            i += 1
+        s = nxt
+    accept = {s}
+    if not (_WILDCARDS & set(pat)):  # "src/api" also matches everything below it
+        below = new()
+        edges[s].append(("/", below))
+        edges[below].append((_ANY, below))
+        accept.add(below)
+    return tuple(map(tuple, edges)), tuple(map(tuple, eps)), frozenset(accept)
+
+
+def _closure(eps: tuple[tuple[int, ...], ...], state: int) -> set[int]:
+    seen, stack = {state}, [state]
+    while stack:
+        for nxt in eps[stack.pop()]:
+            if nxt not in seen:
+                seen.add(nxt)
+                stack.append(nxt)
+    return seen
+
+
+def _labels_meet(a: str, b: str) -> bool:
+    if a == _ANY or b == _ANY:
+        return True
+    if a == _NONSLASH or b == _NONSLASH:
+        other = b if a == _NONSLASH else a
+        return other != "/"
+    return a == b
+
+
+def globs_overlap(a: str, b: str) -> bool:
+    """True if at least one path matches both glob patterns."""
+    edges_a, eps_a, acc_a = _nfa(a)
+    edges_b, eps_b, acc_b = _nfa(b)
+    seen: set[tuple[int, int]] = {(0, 0)}
+    stack = [(0, 0)]
+    while stack:
+        x, y = stack.pop()
+        xs, ys = _closure(eps_a, x), _closure(eps_b, y)
+        if xs & acc_a and ys & acc_b:
+            return True
+        for sx in xs:
+            for la, tx in edges_a[sx]:
+                for sy in ys:
+                    for lb, ty in edges_b[sy]:
+                        if (tx, ty) not in seen and _labels_meet(la, lb):
+                            seen.add((tx, ty))
+                            stack.append((tx, ty))
+    return False

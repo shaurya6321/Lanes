@@ -9,7 +9,7 @@ from typing import Any
 
 import yaml
 
-from .paths import PLAN_FILE, glob_match, specificity, to_posix
+from .paths import PLAN_FILE, glob_match, globs_overlap, specificity, to_posix
 
 try:  # the C loader is much faster when available
     _Loader = yaml.CSafeLoader
@@ -72,6 +72,18 @@ class Ownership:
     hub: HubFile | None = None
 
 
+@dataclass(frozen=True)
+class OwnsOverlap:
+    """Two tasks' `owns` globs that can match the same path; `winner` gets it."""
+
+    a: Task
+    a_glob: str
+    b: Task
+    b_glob: str
+    winner: Task
+    reason: str  # "more specific" | "lower rank" | "listed first"
+
+
 @dataclass
 class Plan:
     feature: str
@@ -128,6 +140,29 @@ class Plan:
                     if best is None or key[:2] > best[:2]:
                         best = key
         return best[2] if best else None
+
+    def owns_overlaps(self) -> list[OwnsOverlap]:
+        """Pairs of different tasks whose `owns` globs can match the same path.
+
+        Where both match, the winner follows `task_for`: the more specific glob,
+        then the lower rank number, then whichever task is listed first.
+        """
+        found: list[OwnsOverlap] = []
+        for i, a in enumerate(self.tasks):
+            for b in self.tasks[i + 1 :]:
+                for pa in a.owns:
+                    for pb in b.owns:
+                        if not globs_overlap(pa, pb):
+                            continue
+                        sa, sb = specificity(pa), specificity(pb)
+                        if sa != sb:
+                            winner, reason = (a if sa > sb else b), "more specific"
+                        elif a.rank != b.rank:
+                            winner, reason = (a if a.rank < b.rank else b), "lower rank"
+                        else:
+                            winner, reason = a, "listed first"
+                        found.append(OwnsOverlap(a, pa, b, pb, winner, reason))
+        return found
 
     def owner_of(self, rel: str) -> Ownership:
         """Precedence: contract file > plan.yaml (the plan owner) > anything else in .lanes/ > hub file > task."""
