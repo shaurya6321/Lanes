@@ -41,10 +41,12 @@ tasks:
     depends_on: []
     status: in_progress
   - id: T2
-    title: Phase 0 gate on Windows, setup guide and e2e script
+    title: Phase 0 gate on Windows (run tests/e2e_phase0.md, record results)
     rank: 2
     owner: friend
-    owns: ["docs/SETUP.md", "tests/e2e_phase0.md"]
+    # docs/SETUP.md and tests/e2e_phase0.md moved to T1 (2026-11-05) so T1 can keep them in
+    # step with the CLI; request changes to them with `lanes request --file <path> "..."`.
+    owns: ["tests/e2e_results/**"]
     uses: [lanes-interface]
     depends_on: [T1]
     status: todo
