@@ -13,6 +13,17 @@ members:
 hub_files:                  # shared files with exactly one owner
   - path: package.json
     owner: $member
+  # Files created by `lanes init`. Whoever runs init owns them; change this if you like.
+  - path: CLAUDE.md
+    owner: $member
+  - path: AGENTS.md
+    owner: $member
+  - path: .claude/**
+    owner: $member
+  - path: .gitignore
+    owner: $member
+  - path: .gitattributes
+    owner: $member
 contracts:
   - id: example-api
     file: .lanes/contracts/example-api.md

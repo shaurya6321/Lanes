@@ -152,6 +152,31 @@ def test_init_creates_working_setup(fresh, capsys):
     assert "$ARGUMENTS" in (fresh / ".claude/commands/lanes-handoff.md").read_text()
 
 
+def test_first_commit_after_init_passes_the_real_git_hook(fresh, capsys, monkeypatch):
+    """Regression: init used to create files nobody owned, so the pre-commit hook blocked the first commit."""
+    import os
+    import sys
+    from pathlib import Path
+
+    monkeypatch.setenv("LANES_USER", "me")
+    run(capsys, "init")
+    bindir = fresh.parent / "bin"
+    bindir.mkdir()
+    shim = bindir / "lanes"  # put a `lanes` on PATH that runs this checkout
+    shim.write_text(f"#!/bin/sh\nexec {sys.executable} -m lanes.cli \"$@\"\n")
+    shim.chmod(0o755)
+    env = dict(os.environ, PATH=f"{bindir}{os.pathsep}{os.environ['PATH']}", LANES_USER="me",
+               PYTHONPATH=str(Path(__file__).resolve().parent.parent))
+    git(fresh, "add", "-A")
+    ok = subprocess.run(["git", "commit", "-q", "-m", "Set up Lanes"], cwd=fresh, env=env, capture_output=True, text=True)
+    assert ok.returncode == 0, ok.stderr
+    (fresh / "src" / "ui").mkdir(parents=True)
+    (fresh / "src" / "ui" / "page.txt").write_text("teammate's lane")
+    git(fresh, "add", "-A")
+    blocked = subprocess.run(["git", "commit", "-q", "-m", "x"], cwd=fresh, env=env, capture_output=True, text=True)
+    assert blocked.returncode != 0 and "src/ui/page.txt" in blocked.stderr
+
+
 def test_init_is_idempotent_and_preserves_user_content(fresh, capsys):
     (fresh / "CLAUDE.md").write_text("# My project\n\nUse tabs.\n")
     (fresh / ".claude").mkdir()
