@@ -2,16 +2,21 @@
 
 This is a manual script for the Phase 0 gate. **A** is the rank-1 member (for example shaurya on macOS) and **B** is the rank-2 member (for example friend on Windows). Tick each box as you go, and write down anything surprising at the bottom.
 
+The project uses the **repo-only** install: Lanes is a dev dependency, nothing is global. Commands below are written `lanes ...`; type `uv run lanes ...`.
+
 ## 0. Prepare a throwaway project (A)
 
 ```
 mkdir lanes-e2e && cd lanes-e2e && git init -b main
-lanes init --member shaurya
+git config user.email <A's email>
+uv init --bare
+uv add --dev "lanes @ git+https://github.com/shaurya6321/Lanes@v0.1.0"
+uv run lanes init --local --member shaurya
 ```
 
 Edit `.lanes/plan.yaml`:
 
-- Rename the member `teammate` to B's id, for example `friend`.
+- Rename the member `teammate` to B's id, for example `friend`, and set its `email` to B's git email.
 - Change T2's `owner` to that id as well.
 - Keep T1 (rank 1, owns `src/api/**` and `src/types/**`, implements `example-api`) and T2 (rank 2, owns `src/ui/**`, uses `example-api`) as they are.
 
@@ -27,8 +32,9 @@ git remote add origin git@github.com:<you>/lanes-e2e.git && git push -u origin m
 
 ## 1. Both machines: identity
 
-- A: `export LANES_USER=shaurya`. B: `setx LANES_USER friend`, then open a new terminal.
-- B: run `git clone ...`, then `cd lanes-e2e` and `lanes init`. Git hooks aren't cloned, so this installs the commit check; it leaves the plan and other files alone.
+- No `LANES_USER` and nothing global: Lanes matches each person's repo-local `git config user.email` to the plan.
+- B: run `git clone ...`, then `cd lanes-e2e`, `git config user.email <B's email in the plan>`, `uv sync` and `lanes init`. Git hooks aren't cloned, so this installs the commit check; it leaves the plan and other files alone.
+- [ ] On B, `lanes` (without `uv run`) is **not** found, and `uv run lanes --version` works.
 - [ ] On B, `git status` is clean after `lanes init`.
 - [ ] On both machines, `lanes whoami` shows the right member and tasks.
 - [ ] On both machines, `/hooks` inside `claude` lists SessionStart, PreToolUse, PostToolUse and Stop.
