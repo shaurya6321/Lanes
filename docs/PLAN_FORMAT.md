@@ -63,7 +63,7 @@ tasks:
 | `tasks[].implements` | no | Contract ids this task provides. The task's owner must also own the contract. |
 | `tasks[].uses` | no | Contract ids this task relies on. The task gets a notice when one of them changes. |
 | `tasks[].depends_on` | no | Task ids that must come first. Each must have a **lower** rank. |
-| `tasks[].status` | no | One of `todo` (the default), `in_progress`, `blocked`, `review`, `done`. |
+| `tasks[].status` | no | One of `todo` (the default), `in_progress`, `blocked`, `review`, `done`. The task's owner changes it with `lanes task status TASK STATUS`. |
 
 ## Globs
 
@@ -78,11 +78,12 @@ tasks:
 
 Lanes checks these in order, and the first match decides:
 
-1. **A contract file:** the contract's owner. This check comes before rule 2 because contracts live in `.lanes/`.
-2. **Anything else under `.lanes/`:** anyone may write it. This covers handoffs, summaries, `decisions.md` and `plan.yaml`. Notices in `.lanes/notices/` may be committed by anyone but are written only by `lanes` commands and the hooks; the guard blocks direct edits there.
-3. **A hub file:** the hub file's owner. If several hub patterns match, the most specific one wins.
-4. **A task's `owns` glob:** that task's owner. If several patterns match, the most specific wins, meaning the one with the longest literal prefix. For example, `tests/e2e_phase0.md` beats `tests/**`.
-5. **Nothing matched:** the path is unowned, and nobody may edit it until the plan gives it an owner.
+1. **A contract file:** the contract's owner. This check comes before rule 3 because contracts live in `.lanes/`.
+2. **`.lanes/plan.yaml`:** the plan owner (`owner:`, or else the rank-1 task's owner). The guard blocks everyone else's edits. The commit check blocks their commits too, with one exception: a change whose only difference from the last committed plan is the `status` of tasks they own. That is what `lanes task status` writes. For commits, the plan owner is read from the **committed** plan, so editing `owner:` to yourself doesn't help. An invalid plan turns the guard off (fail-open), so anyone can repair it.
+3. **Anything else under `.lanes/`:** anyone may write it. This covers handoffs, summaries and `decisions.md`. Notices in `.lanes/notices/` may be committed by anyone but are written only by `lanes` commands and the hooks; the guard blocks direct edits there.
+4. **A hub file:** the hub file's owner. If several hub patterns match, the most specific one wins.
+5. **A task's `owns` glob:** that task's owner. If several patterns match, the most specific wins, meaning the one with the longest literal prefix. For example, `tests/e2e_phase0.md` beats `tests/**`.
+6. **Nothing matched:** the path is unowned, and nobody may edit it until the plan gives it an owner.
 
 You may edit a path when you are its owner through any of your tasks, hub files or contracts.
 
@@ -92,7 +93,7 @@ You may edit a path when you are its owner through any of your tasks, hub files 
 - A contract is changed only by its owner. Every change creates a notice for tasks with a **higher rank** that `use` the contract or depend on the changing task, directly or indirectly.
 - A notice never goes to a task of the same or a lower rank. This prevents two agents from reacting to each other in a loop.
 - Requests made with `lanes request` go straight to the owner whatever the rank, because they are explicit asks rather than automatic reactions.
-- **Plan changes:** when the plan owner edits `plan.yaml`, Lanes compares it with the last commit and sends one `kind: plan` notice to every task whose `owns`, `uses`, `implements`, `owner` or `rank` changed (and to a reassigned task's former owner). Plan notices skip the rank rule, because a task losing files must hear about it. They can't loop, because only the plan owner's edits create them. Edits by anyone else send nothing, and Claude is told to undo them unless the plan owner agreed. Status-only edits send nothing.
+- **Plan changes:** when the plan owner edits `plan.yaml`, Lanes compares it with the last commit and sends one `kind: plan` notice to every task whose `owns`, `uses`, `implements`, `owner` or `rank` changed (and to a reassigned task's former owner). Plan notices skip the rank rule, because a task losing files must hear about it. They can't loop, because only the plan owner's edits create them. Only the plan owner can edit the plan (see rule 2 above). Status-only changes, by anyone, never send a notice.
 - Merge order equals rank order.
 
 ## Validation

@@ -13,7 +13,7 @@ import sys
 
 from .. import gitutil
 from ..identity import resolve
-from ..lane import check_lane
+from ..lane import check_commit_path
 from ..plan import PlanError, load_plan
 
 
@@ -34,7 +34,7 @@ def main() -> int:
         print(f"lanes: WARNING: lane check skipped. {ident.detail}", file=sys.stderr)
         return 0
 
-    blocked = [(rel, d) for rel in gitutil.staged_paths(root) if not (d := check_lane(plan, ident.member_id, rel)).allowed]
+    blocked = [(rel, d) for rel in gitutil.staged_paths(root) if not (d := check_commit_path(root, plan, ident.member_id, rel)).allowed]
     if not blocked:
         return 0
     print(f"Lanes: this commit touches {len(blocked)} file(s) outside your lane ({ident.member_id}):\n", file=sys.stderr)

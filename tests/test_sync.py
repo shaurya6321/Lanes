@@ -178,3 +178,29 @@ def test_sync_commit_still_runs_the_lane_check(team, monkeypatch, capsys):
     (a / ".lanes" / "contracts" / "checkout-events.md").write_text("# friend's contract, edited by shaurya\n")
     code, out = sync(a, monkeypatch, capsys)
     assert code == 1 and "lane check" in out and "checkout-events.md" in out
+
+
+def test_task_status_by_its_owner_syncs_through_the_commit_check(team, monkeypatch, capsys):
+    import os
+    import sys
+
+    from lanes.install import install_git_hook
+
+    origin, a, b = team
+    monkeypatch.setenv("PATH", str(Path(sys.executable).parent) + os.pathsep + os.environ.get("PATH", ""))
+    install_git_hook(b)
+    monkeypatch.chdir(b)
+    assert main(["task", "status", "T2", "in_progress"]) == 0
+    code, out = sync(b, monkeypatch, capsys)
+    assert code == 0 and "Pushed 1 commit(s)" in out, out
+    assert list_notices(b) == []  # status-only: no plan notice
+    assert sync(a, monkeypatch, capsys)[0] == 0
+    assert load_plan(a).task("T2").status == "in_progress"
+
+    import yaml
+
+    data = yaml.safe_load((b / ".lanes" / "plan.yaml").read_text())
+    data["tasks"][1]["owns"].append("src/api/**")  # friend grabs files by hand
+    write_plan(b, data)
+    code, out = sync(b, monkeypatch, capsys)
+    assert code == 1 and "plan owner, shaurya" in out

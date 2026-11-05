@@ -4,7 +4,7 @@ Owner: shaurya · Implemented by: T1 · Used by: T2
 
 ## Interface
 - **Install modes:** global (`lanes ...` on PATH) or repo-only (`lanes init --local`: Lanes is a dev dependency, hooks run `uv run --project ${CLAUDE_PROJECT_DIR} lanes hook NAME`, and every message says `uv run lanes ...`). `lanes init` without a flag keeps the repo's current mode.
-- **CLI:** `lanes init [--local|--global] | whoami | status | check PATH...|--staged | notices [--all] [--mark-read [ID...]] | notices amend ID [--summary S] [--body B] | request (--file PATH|--to MEMBER) MSG | handoff [TASK] | sync [--include-code] | hook NAME`
+- **CLI:** `lanes init [--local|--global] | whoami | status | check PATH...|--staged | notices [--all] [--mark-read [ID...]] | notices amend ID [--summary S] [--body B] | request (--file PATH|--to MEMBER) MSG | handoff [TASK] | task status TASK STATUS | sync [--include-code] | hook NAME`
 - **Exit codes:** `check` returns 0 when the path is in your lane and 2 when it isn't. `sync` returns 3 when it held back unpushed code commits (no `--include-code`). Any other error returns 1. The git pre-commit hook returns 1 when it blocks a commit.
 - **Identity:** `LANES_USER`, or else `git config user.email` matched against `members[].email`.
 - **Plan schema and ownership precedence:** see `docs/PLAN_FORMAT.md`.
@@ -15,9 +15,11 @@ Owner: shaurya · Implemented by: T1 · Used by: T2
 - Notices go only to tasks with a higher rank.
 - Plan notices (`kind: plan`, with `base: <commit>`) go to every task whose `owns`/`uses`/`implements`/`owner`/`rank` the plan owner changed, whatever the rank. The plan owner is the top-level `owner:` (optional; default: the rank-1 task's owner).
 - Files in `.lanes/notices/` are written only by `lanes` commands and the hooks. The guard denies Edit/Write/NotebookEdit there; use `lanes notices amend` (author only, while unread).
+- `.lanes/plan.yaml` is owned by the plan owner. Others change only their own tasks' `status`, via `lanes task status`; the commit check accepts a non-owner's plan change only if that is the sole difference from the committed plan (whose `owner:` is the one used). Status-only changes never create notices.
 
 ## Change log
 <!-- Newest first, one line per change. Each edit to this file automatically notifies T2. -->
+- 2026-11-05: `.lanes/plan.yaml` belongs to the plan owner; new `lanes task status TASK STATUS` for task owners.
 - 2026-11-05: `lanes init --local` (repo-only installs) and `--global`; messages use the matching command spelling.
 - 2026-11-05: `lanes sync [--include-code]` (exit 3 when code commits are held back).
 - 2026-11-05: plan notices (`kind: plan`) and the optional plan `owner:` field.

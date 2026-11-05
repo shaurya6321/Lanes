@@ -68,10 +68,20 @@ git remote add origin git@github.com:<you>/lanes-e2e.git && git push -u origin m
 
 ## 6. Notices never flow upstream
 
-- B: in `.lanes/plan.yaml`, add a contract `ui-events` with `file: .lanes/contracts/ui-events.md` and `owner: friend`. Add `implements: [ui-events]` to T2, and `uses: [ui-events]` to T1. That last part is deliberately the wrong direction. Run `lanes sync`.
-- [ ] No plan notice is written, because B isn't the plan owner (only A's ownership edits send plan notices).
+- B: ask Claude to "add a contract `ui-events` to `.lanes/plan.yaml`".
+- [ ] The edit is **blocked**: the plan belongs to the plan owner (A). Claude suggests `lanes request --file .lanes/plan.yaml ...` instead.
+- A (plan owner): in `.lanes/plan.yaml`, add a contract `ui-events` with `file: .lanes/contracts/ui-events.md` and `owner: friend`. Add `implements: [ui-events]` to T2, and `uses: [ui-events]` to T1. That last part is deliberately the wrong direction. Run `lanes sync`. B: `lanes sync`.
 - B: ask Claude to "create `.lanes/contracts/ui-events.md` describing a Clicked event."
 - [ ] **No notice** is created for T1, because rank 2 never notifies rank 1. `ls .lanes/notices` shows no new file.
+
+## 6a. Task owners update their own status
+
+- B: ask Claude to "mark T2 as in progress".
+- [ ] Claude runs `lanes task status T2 in_progress` (it doesn't edit `plan.yaml`). Only T2's `status:` line changes (`git diff .lanes/plan.yaml`).
+- B: `lanes sync`.
+- [ ] The commit goes through the lane check, and **no** plan notice is written. On A, `lanes sync` and then `lanes status` show T2 `in_progress`.
+- B: `lanes task status T1 done`.
+- [ ] It refuses: T1 belongs to A.
 
 ## 6b. Plan changes notify the affected task
 

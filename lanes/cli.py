@@ -117,7 +117,7 @@ def cmd_whoami(args) -> int:
 
 def cmd_status(args) -> int:
     from . import gitutil
-    from .lane import check_lane
+    from .lane import check_commit_path
     from .notices import unread_for
 
     ctx = load_ctx(need_member=False)
@@ -141,7 +141,7 @@ def cmd_status(args) -> int:
     if ctx.member:
         outside = []
         for rel in gitutil.dirty_paths(ctx.root):
-            d = check_lane(plan, ctx.member, rel)
+            d = check_commit_path(ctx.root, plan, ctx.member, rel, staged=False)
             if not d.allowed:
                 outside.append(f"{rel} ({'owned by ' + d.ownership.owner if d.ownership.owner else 'unowned'})")
         if outside:
@@ -154,7 +154,7 @@ def cmd_status(args) -> int:
 
 def cmd_check(args) -> int:
     from . import gitutil
-    from .lane import check_lane
+    from .lane import check_commit_path, check_lane
 
     ctx = load_ctx()
     if args.staged:
@@ -172,7 +172,7 @@ def cmd_check(args) -> int:
             rels.append(rel)
     worst = EXIT_OK
     for rel in rels:
-        d = check_lane(ctx.plan, ctx.member, rel)
+        d = check_commit_path(ctx.root, ctx.plan, ctx.member, rel) if args.staged else check_lane(ctx.plan, ctx.member, rel)
         if d.allowed:
             if not args.quiet:
                 print(f"ok    {rel}: {d.reason}")
@@ -279,6 +279,21 @@ def cmd_handoff(args) -> int:
     return EXIT_OK
 
 
+def cmd_task(args) -> int:
+    from .taskstatus import set_status
+
+    ctx = load_ctx()
+    try:
+        old, new = set_status(ctx.root, ctx.plan, ctx.member, args.task_id, args.status)
+    except ValueError as exc:
+        raise CliError(str(exc)) from exc
+    if old == new:
+        print(f"{args.task_id} is already {new}.")
+    else:
+        print(f"{args.task_id} status: {old} -> {new} (in .lanes/plan.yaml). Run `{lanes_cmd(ctx.root)} sync` to share it.")
+    return EXIT_OK
+
+
 def cmd_sync(args) -> int:
     from .sync import sync
 
@@ -340,6 +355,13 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--task", help="task id (default: your in-progress task)")
     s.add_argument("task_pos", nargs="?", metavar="TASK", help=argparse.SUPPRESS)
     s.set_defaults(func=cmd_handoff)
+
+    s = sub.add_parser("task", help="update one of your tasks: `lanes task status TASK STATUS`")
+    task_sub = s.add_subparsers(dest="task_action", required=True)
+    t = task_sub.add_parser("status", help="set the status of a task you own (Lanes edits plan.yaml for you)")
+    t.add_argument("task_id", metavar="TASK")
+    t.add_argument("status", choices=["todo", "in_progress", "blocked", "review", "done"])
+    t.set_defaults(func=cmd_task)
 
     s = sub.add_parser(
         "sync",

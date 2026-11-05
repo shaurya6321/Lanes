@@ -148,3 +148,49 @@ def ownership_changed(root: Path, new: Plan, editor: str) -> bool:
     """True when the uncommitted plan changes anyone else's tasks (used to warn non-owners)."""
     old, _ = committed_plan(root)
     return bool(old and diff_plans(old, new, editor).members)
+
+
+# ---- status-only changes by task owners (`lanes task status`) -------------------------------
+
+
+def _without_status(data: dict, task_ids: set[str]) -> dict:
+    import copy
+
+    out = copy.deepcopy(data)
+    for t in out.get("tasks") or []:
+        if isinstance(t, dict) and t.get("id") in task_ids:
+            t.pop("status", None)
+    return out
+
+
+def status_only_change(root: Path, member: str, staged: bool = True) -> tuple[bool | None, str]:
+    """Is the new plan.yaml (index if `staged`, else working tree) a change `member` may make?
+
+    Returns (None, why) when there's no valid committed plan to compare with,
+    (True, why) for the plan owner or a status-only change to the member's own
+    tasks, and (False, why) otherwise.
+    """
+    old, _ = committed_plan(root)
+    if old is None:
+        return None, "no committed plan to compare with"
+    if member == old.owner:
+        return True, f"{PLAN_FILE}: you are the plan owner"
+    if staged:
+        text = gitutil.run_git(root, "show", f":{PLAN_FILE}")
+    else:
+        try:
+            text = (root / PLAN_FILE).read_text(encoding="utf-8")
+        except OSError:
+            text = None
+    if text is None:
+        return False, "only the plan owner can delete the plan"
+    try:
+        new_data = yaml.safe_load(text)
+        parse_plan(new_data, root)
+    except (PlanError, yaml.YAMLError) as exc:
+        return False, f"the new plan is invalid: {exc}"
+    old_data = yaml.safe_load(gitutil.show_head(root, PLAN_FILE) or "")
+    mine = {t.id for t in old.tasks_of(member)}
+    if _without_status(old_data, mine) == _without_status(new_data, mine):
+        return True, f"{PLAN_FILE}: only the status of your own tasks changed"
+    return False, f"compared with the last commit, this changes more than the status of your own tasks ({', '.join(sorted(mine)) or 'none'})"

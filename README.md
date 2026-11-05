@@ -59,6 +59,7 @@ To check it's working, run `lanes whoami` (your tasks and owned files) and `lane
 | `lanes notices` | Lists unread notices addressed to you. Use `--mark-read` once you've acted on them, or `--all` to include ones already read. |
 | `lanes notices amend ID --summary "…"` | Rewrites the summary (and `--body`) of a notice you wrote, as long as nobody has read it yet. Files in `.lanes/notices/` are never edited directly; the guard blocks that. |
 | `lanes request --file PATH "msg"` | Asks a path's owner for a change. |
+| `lanes task status TASK STATUS` | Sets the status of a task you own. Only the plan owner edits `plan.yaml` directly; this is how everyone else updates status, and the commit check accepts it. Status changes never send notices. |
 | `lanes handoff [TASK]` | Creates a handoff note from the template and prints its path. |
 | `lanes sync` | Shares `.lanes/` with the team: commits `.lanes/` only, runs `git pull --rebase --autostash`, then pushes. It pushes on its own only when every unpushed commit is `.lanes/`-only; otherwise it lists your code commits and stops (exit 3) unless you pass `--include-code`. |
 

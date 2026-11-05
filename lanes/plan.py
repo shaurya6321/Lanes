@@ -65,7 +65,7 @@ class Task:
 class Ownership:
     """Who owns a path, and why."""
 
-    kind: str  # "lanes" | "contract" | "hub" | "task" | "unowned"
+    kind: str  # "plan" | "lanes" | "contract" | "hub" | "task" | "unowned"
     owner: str | None = None
     task: Task | None = None
     contract: Contract | None = None
@@ -130,11 +130,13 @@ class Plan:
         return best[2] if best else None
 
     def owner_of(self, rel: str) -> Ownership:
-        """Precedence: contract file > anything else in .lanes/ > hub file > task."""
+        """Precedence: contract file > plan.yaml (the plan owner) > anything else in .lanes/ > hub file > task."""
         rel = to_posix(rel)
         c = self.contract_for_file(rel)
         if c:
             return Ownership("contract", c.owner, contract=c, task=self.implementer(c.id))
+        if rel.lower() == PLAN_FILE:
+            return Ownership("plan", self.owner)
         if rel == ".lanes" or rel.startswith(".lanes/"):
             return Ownership("lanes")
         h = self.hub_for(rel)
