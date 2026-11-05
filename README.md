@@ -45,7 +45,7 @@ To check it's working, run `uv run lanes whoami` (your tasks and owned files) an
 
 **Optional: global install.** If you'd rather have `lanes` on your PATH for every repo, run `uv tool install git+https://github.com/shaurya6321/Lanes` and `lanes init` without `--local`. Update with `uv tool upgrade lanes`. To develop Lanes itself, clone it and run `uv tool install --editable .`.
 
-**Private repo?** While `shaurya6321/Lanes` is private, both installs need GitHub access: you must be a collaborator, and git must be able to sign in. On Windows, Git for Windows opens a browser sign-in the first time. If https doesn't work for you but SSH does, use `git+ssh://git@github.com/shaurya6321/Lanes.git` in place of the https URL.
+**https blocked?** If https to GitHub doesn't work for you but SSH does, use `git+ssh://git@github.com/shaurya6321/Lanes.git` in place of the https URL.
 
 ## Commands
 

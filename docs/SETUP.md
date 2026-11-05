@@ -19,16 +19,18 @@ uv --version
 claude --version      # 2.1.318 or newer; update with `claude update`
 ```
 
-## 2. Get access to the repo
+## 2. Get access to your team's repo
 
-1. Ask Shaurya to add your GitHub account as a collaborator on `shaurya6321/Lanes`, then accept the invite email.
+Lanes itself is public, so installing it needs no invite or sign-in. You only need access to the project your team is working on.
+
+1. Ask the project owner to add your GitHub account as a collaborator on the project repo, then accept the invite email.
 2. Make sure git can reach GitHub. With https (the default on Windows), Git for Windows signs you in through the browser the first time. With SSH, run `ssh -T git@github.com`; it should say "Hi <your-username>!". If it doesn't, follow [GitHub's SSH key guide](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/generating-a-new-ssh-key-and-adding-it-to-the-ssh-agent).
 
 ## 3. Get Lanes (nothing global)
 
 In a team project, Lanes is a **dev dependency of the project**, so there's nothing to install on your machine beyond uv. `uv sync` (step 5) puts it in the project's own `.venv`, and you run it as `uv run lanes ...`. Nothing goes on your PATH, and Lanes doesn't run in your other projects.
 
-While the Lanes repo is private, `uv sync` downloads it through git as you. On Windows, Git for Windows opens a browser sign-in the first time. If https fails but `ssh -T git@github.com` works, ask the project owner to switch the dependency URL to `git+ssh://git@github.com/shaurya6321/Lanes.git`.
+The Lanes repo is public, so `uv sync` downloads it over https with no GitHub login. If your network blocks https to GitHub but `ssh -T git@github.com` works, ask the project owner to switch the dependency URL to `git+ssh://git@github.com/shaurya6321/Lanes.git`.
 
 **Optional: global install.** If you want `lanes` on your PATH for every repo, run `uv tool install git+https://github.com/shaurya6321/Lanes` (update with `uv tool upgrade lanes`). If `lanes` isn't found afterwards, run `uv tool update-shell` and open a new terminal. Only if you're developing Lanes itself: clone it and run `uv tool install --editable .` in the clone.
 
