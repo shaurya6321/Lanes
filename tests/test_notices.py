@@ -83,3 +83,43 @@ def test_request_goes_to_owner_regardless_of_rank(repo):
     req = N.make_request(repo, plan, "friend", "Please add `currency` to Cart\nNeeded for the price label.", rel="src/types/cart.ts")
     assert req.kind == "request" and req.to_members == ["shaurya"] and req.from_rank == 2
     assert [n.id for n in N.unread_for(repo, plan, "shaurya")] == [req.id]
+
+
+# Exact front matter an agent wrote in the live e2e run: the unquoted summary
+# contains ': ' ("id: str"), which is invalid YAML. It must still be read.
+AGENT_EDITED = """---
+id: 20261105T132621Z-t1-example-api
+kind: change
+from_member: shaurya
+from_task: T1
+from_rank: 1
+to_tasks:
+- T2
+to_members:
+- friend
+contract: example-api
+created: '2026-11-05T13:26:21Z'
+session: 1b8753aa-10e1-45ea-9d61-ce5917fb72da
+summary: Added `getItem(id: str) -> Item` to the example-api Interface; it raises a 404 error when the item is missing.
+---
++ getItem(id: str) -> Item  # returns 404 error if missing
+New function: `getItem`, takes `id` (str), returns `Item`.
+"""
+
+
+def test_agent_edited_notice_with_invalid_yaml_is_still_read(repo):
+    path = repo / ".lanes" / "notices" / "20261105T132621Z-t1-example-api.md"
+    path.write_text(AGENT_EDITED)
+    n = N.parse_notice(path)
+    assert n is not None
+    assert n.to_tasks == ["T2"] and n.to_members == ["friend"] and n.from_rank == 1
+    assert n.created == "2026-11-05T13:26:21Z" and n.contract == "example-api"
+    assert n.summary.startswith("Added `getItem(id: str) -> Item`")
+    plan = load_plan(repo)
+    assert [x.id for x in N.unread_for(repo, plan, "friend")] == [n.id]
+    assert N.unreadable_notices(repo) == []
+
+
+def test_unparseable_notice_is_reported_not_hidden(repo):
+    (repo / ".lanes" / "notices" / "broken.md").write_text("no front matter at all\n")
+    assert N.unreadable_notices(repo) == [".lanes/notices/broken.md"]

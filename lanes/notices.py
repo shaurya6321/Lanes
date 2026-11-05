@@ -177,12 +177,50 @@ def write_notice(root: Path, notice: Notice) -> Path:
     return path
 
 
+def _lenient_front_matter(text: str) -> dict:
+    """Fallback for hand-edited front matter that isn't valid YAML.
+
+    Agents rewrite the `summary:` line, and an unquoted value containing ': '
+    (for example `getItem(id: str) -> Item`) breaks strict YAML. Notices must
+    never be dropped silently, so read `key: value` and `- item` lines directly.
+    """
+    data: dict = {}
+    key = None
+    for line in text.splitlines():
+        if not line.strip():
+            continue
+        m = re.match(r"^([A-Za-z_]+):(?:\s+(.*))?$", line)
+        if m:
+            key, val = m.group(1), (m.group(2) or "").strip()
+            if not val:
+                data[key] = []
+            elif val.startswith("[") and val.endswith("]"):
+                data[key] = [v.strip().strip("'\"") for v in val[1:-1].split(",") if v.strip()]
+            elif len(val) >= 2 and val[0] in "'\"" and val[-1] == val[0]:
+                data[key] = val[1:-1]
+            else:
+                data[key] = val
+        elif key and line.lstrip().startswith("- "):
+            if not isinstance(data.get(key), list):
+                data[key] = []
+            data[key].append(line.lstrip()[2:].strip().strip("'\""))
+    return data
+
+
 def parse_notice(path: Path) -> Notice | None:
     try:
         m = _FRONT.match(path.read_text(encoding="utf-8").replace("\r\n", "\n"))
         if not m:
             return None
-        fm = yaml.safe_load(m.group(1)) or {}
+        try:
+            fm = yaml.safe_load(m.group(1))
+        except yaml.YAMLError:
+            fm = None
+        if not isinstance(fm, dict):
+            fm = _lenient_front_matter(m.group(1))
+        for k in ("from_task", "contract", "file", "session"):
+            if fm.get(k) == []:  # lenient parser: "key:" with nothing after it
+                fm[k] = None
         return Notice(
             id=str(fm.get("id") or path.stem),
             kind=str(fm.get("kind", "change")),
@@ -203,12 +241,19 @@ def parse_notice(path: Path) -> Notice | None:
         return None
 
 
-def list_notices(root: Path) -> list[Notice]:
+def _notice_files(root: Path) -> list[Path]:
     folder = root / NOTICES_DIR
-    if not folder.is_dir():
-        return []
-    found = [parse_notice(p) for p in folder.glob("*.md") if not p.name.startswith("_")]
+    return [p for p in folder.glob("*.md") if not p.name.startswith("_")] if folder.is_dir() else []
+
+
+def list_notices(root: Path) -> list[Notice]:
+    found = [parse_notice(p) for p in _notice_files(root)]
     return sorted((n for n in found if n), key=lambda n: (n.created, n.id))
+
+
+def unreadable_notices(root: Path) -> list[str]:
+    """Notice files that couldn't be parsed at all, so `lanes status` can warn instead of hiding them."""
+    return sorted(p.relative_to(root).as_posix() for p in _notice_files(root) if parse_notice(p) is None)
 
 
 def addressed_to(notice: Notice, plan: Plan, member_id: str) -> bool:

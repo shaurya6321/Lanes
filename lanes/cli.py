@@ -124,6 +124,11 @@ def cmd_status(args) -> int:
 
     counts = [f"{m.id} {len(unread_for(ctx.root, plan, m.id))}" for m in plan.members]
     print(f"\nUnread notices: {' · '.join(counts)}")
+    from .notices import unreadable_notices
+
+    broken = unreadable_notices(ctx.root)
+    if broken:
+        print(f"Warning: {len(broken)} notice file(s) could not be read (fix the front matter): {', '.join(broken)}")
 
     if ctx.member:
         outside = []
