@@ -1,0 +1,36 @@
+# Lanes plan. Spec: https://github.com/shaurya6321/Lanes/blob/main/docs/PLAN_FORMAT.md
+# Rules:
+#   - Every file a task writes must match one of its `owns` globs.
+#   - A contract is changed only by its owner; each change notifies higher-rank tasks that use it.
+#   - Lower rank = upstream. Notices flow 1 -> 2 -> 3, never back. Merge in rank order.
+feature: my-feature
+updated: $today
+members:
+  - id: $member
+    email: $email
+  - id: teammate            # replace with your teammate's id (they set LANES_USER=teammate)
+    email: teammate@example.com
+hub_files:                  # shared files with exactly one owner
+  - path: package.json
+    owner: $member
+contracts:
+  - id: example-api
+    file: .lanes/contracts/example-api.md
+    owner: $member
+tasks:
+  - id: T1
+    title: Example API + types
+    rank: 1
+    owner: $member
+    owns: ["src/api/**", "src/types/**"]
+    implements: [example-api]
+    depends_on: []
+    status: in_progress
+  - id: T2
+    title: Example UI
+    rank: 2
+    owner: teammate
+    owns: ["src/ui/**"]
+    uses: [example-api]
+    depends_on: [T1]
+    status: todo
