@@ -139,11 +139,20 @@ def cmd_status(args) -> int:
         print(f"Warning: {len(broken)} notice file(s) could not be read (fix the front matter): {', '.join(broken)}")
 
     overlaps = plan.owns_overlaps()
-    if overlaps:
+    intended = [o for o in overlaps if o.why]
+    unexplained = [o for o in overlaps if not o.why]
+    if intended:
+        print("\nIntended overlaps (explained under `overlaps:` in the plan):")
+        for o in intended:
+            print(f"  {o.a.id} {o.a_glob} and {o.b.id} {o.b_glob}: {o.winner.id} wins ({o.reason}). Why: {o.why}")
+    if unexplained:
         print("\nWarning: overlapping `owns` globs between tasks (where both match, one task wins):")
-        for o in overlaps:
+        for o in unexplained:
             print(f"  {o.a.id} {o.a_glob} and {o.b.id} {o.b_glob}: {o.winner.id} wins ({o.reason})")
-        print("  If that's intended, nothing to do. Otherwise ask the plan owner to narrow one of the globs.")
+        print("  If that's intended, the plan owner explains it under `overlaps:` in the plan. Otherwise narrow one of the globs.")
+    stale = plan.stale_overlaps()
+    if stale:
+        print("\nWarning: " + "\n  ".join(stale))
 
     if ctx.member:
         outside = []
@@ -301,6 +310,57 @@ def cmd_task(args) -> int:
     return EXIT_OK
 
 
+def _root() -> Path:
+    from .paths import find_root
+
+    root = find_root()
+    if root is None:
+        raise CliError("no .lanes/ directory found here or in any parent. Run `lanes init` at the repo root first.")
+    return root
+
+
+def cmd_plan(args) -> int:
+    from . import proposal as P
+
+    if args.plan_action == "check":
+        root = _root()
+        res = P.check_proposal(root)
+        for e in res.errors:
+            print(f"  error    {e}")
+        for w in res.warnings:
+            print(f"  warning  {w}")
+        if res.ok:
+            print(f"{P.PROPOSAL_FILE}: OK ({len(res.warnings)} warning(s)). Review it with `{lanes_cmd(root)} plan diff`.")
+            return EXIT_OK
+        print(f"{P.PROPOSAL_FILE}: {len(res.errors)} problem(s) to fix before it can be accepted.")
+        return EXIT_ERROR
+    if args.plan_action == "diff":
+        root = _root()
+        try:
+            lines = P.diff_proposal(root)
+        except P.ProposalError as exc:
+            raise CliError("can't read the proposal:\n  - " + "\n  - ".join(exc.errors)) from exc
+        print(f"{P.PROPOSAL_FILE} compared with .lanes/plan.yaml\n")
+        print("\n".join(lines))
+        return EXIT_OK
+    # accept
+    ctx = load_ctx()
+    L = lanes_cmd(ctx.root)
+    try:
+        result = P.accept_proposal(ctx.root, ctx.member, force=args.force)
+    except (ValueError, P.ProposalError) as exc:
+        raise CliError(str(exc)) from exc
+    print(f"Accepted: .lanes/plan.yaml now has {len(result.plan.tasks)} task(s); {P.PROPOSAL_FILE} was removed.")
+    for f in result.moved_contracts:
+        print(f"  contract draft moved to {f}")
+    if result.notice is not None:
+        print(f"  plan notice for {', '.join(result.notice.to_members)}: {result.notice.path.relative_to(ctx.root).as_posix()}")
+    for w in result.warnings:
+        print(f"  warning  {w}")
+    print(f"Commit .lanes/ and run `{L} sync` so the team gets the new plan.")
+    return EXIT_OK
+
+
 def cmd_sync(args) -> int:
     from .sync import sync
 
@@ -369,6 +429,14 @@ def build_parser() -> argparse.ArgumentParser:
     t.add_argument("task_id", metavar="TASK")
     t.add_argument("status", choices=["todo", "in_progress", "blocked", "review", "done"])
     t.set_defaults(func=cmd_task)
+
+    s = sub.add_parser("plan", help="review and accept a plan proposal written by /lanes-plan")
+    plan_sub = s.add_subparsers(dest="plan_action", required=True)
+    plan_sub.add_parser("check", help="validate .lanes/plan.proposed.yaml (exit 1 if it has problems)").set_defaults(func=cmd_plan)
+    plan_sub.add_parser("diff", help="show what accepting the proposal would change, including files that move").set_defaults(func=cmd_plan)
+    a = plan_sub.add_parser("accept", help="plan owner only: replace plan.yaml with the proposal and send plan notices")
+    a.add_argument("--force", action="store_true", help="accept even though plan.yaml changed since the proposal was drafted")
+    a.set_defaults(func=cmd_plan)
 
     s = sub.add_parser(
         "sync",

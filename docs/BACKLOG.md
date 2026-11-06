@@ -14,7 +14,7 @@ Phase 0 deliberately leaves these out. Each line says which phase it belongs to 
 
 ## Known gaps in Phase 0
 - **Writes made through Bash aren't guarded before they happen.** Only the pre-commit check catches them. A future option is a PreToolUse hook on Bash that parses common write patterns. It would be best-effort. The same gap applies to `.lanes/notices/`: the guard blocks Edit/Write/NotebookEdit there, but a shell command like `echo > .lanes/notices/x.md` isn't caught, and the commit check allows notices because the `lanes` commands write them legitimately.
-- **Overlapping globs between different owners** (for example `src/**` and `src/api/**`) aren't rejected when the plan is validated. At lookup time the most specific pattern wins. Phase 2's planner should flag overlaps.
+- **Overlapping globs between different owners** (for example `src/**` and `src/api/**`) don't make `plan.yaml` invalid, because an invalid plan turns the guard off. `lanes status` warns about any overlap not explained under `overlaps:`, and `lanes plan check` rejects such a proposal. At lookup time the most specific pattern wins.
 - **Read state for notices** is kept in one append-only file per member, `.lanes/notices/read-by/<member>.txt`. That avoids git conflicts but grows forever. Prune it once the plan is archived.
 - **The "why" line in summaries** is taken from Claude's last message, so a turn that ends with a question gives a weak "why".
 - **The PyPI name `lanes` is probably taken.** Before publishing, check it and fall back to `lanes-dev` or `lanesync`.

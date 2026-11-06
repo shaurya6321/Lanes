@@ -46,6 +46,26 @@ def _task_block(lines: list[str], task_id: str) -> tuple[int, int, int] | None:
     return None
 
 
+def replace_status(text: str, task_id: str, status: str) -> str | None:
+    """`text` with `task_id`'s `status:` line set (or added), keeping comments and layout. None if not found."""
+    lines = text.splitlines(keepends=True)
+    found = _task_block(lines, task_id)
+    if found is None:
+        return None
+    first, end, col = found
+    pat = re.compile(r"^(\s{" + str(col) + r"}status:\s*)([^#\s]+)(\s*(#.*)?)$")
+    for i in range(first, end):
+        m = pat.match(lines[i].rstrip("\r\n"))
+        if m:
+            eol = lines[i][len(lines[i].rstrip("\r\n")):]
+            lines[i] = m.group(1) + status + m.group(3) + eol
+            break
+    else:
+        eol = "\r\n" if lines[first].endswith("\r\n") else "\n"
+        lines.insert(first + 1, " " * col + f"status: {status}{eol}")
+    return "".join(lines)
+
+
 def _without(data: dict, task_id: str) -> dict:
     from .plandiff import _without_status
 
@@ -66,22 +86,9 @@ def set_status(root: Path, plan: Plan, member: str, task_id: str, status: str) -
 
     path = root / PLAN_FILE
     text = path.read_text(encoding="utf-8")
-    lines = text.splitlines(keepends=True)
-    found = _task_block(lines, task_id)
-    if found is None:
+    new_text = replace_status(text, task_id, status)
+    if new_text is None:
         raise ValueError(f"couldn't find `- id: {task_id}` under `tasks:` in {PLAN_FILE}; ask the plan owner ({plan.owner}) to update it")
-    first, end, col = found
-    pat = re.compile(r"^(\s{" + str(col) + r"}status:\s*)([^#\s]+)(\s*(#.*)?)$")
-    for i in range(first, end):
-        m = pat.match(lines[i].rstrip("\r\n"))
-        if m:
-            eol = lines[i][len(lines[i].rstrip("\r\n")):]
-            lines[i] = m.group(1) + status + m.group(3) + eol
-            break
-    else:
-        eol = "\r\n" if lines[first].endswith("\r\n") else "\n"
-        lines.insert(first + 1, " " * col + f"status: {status}{eol}")
-    new_text = "".join(lines)
 
     # Prove the edit changed exactly one field before writing it.
     old_data, new_data = yaml.safe_load(text), yaml.safe_load(new_text)

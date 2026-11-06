@@ -93,13 +93,17 @@ def auto_summary(editor: str, change: PlanChange, new: Plan) -> str:
     return f"{AUTO_PREFIX}{editor}: task ownership changed for {who}. See the lines below."
 
 
-def record_plan_change(root: Path, new: Plan, editor: str, session: str | None = None) -> tuple[Notice | None, bool]:
+def record_plan_change(
+    root: Path, new: Plan, editor: str, session: str | None = None, require_owner: bool = True
+) -> tuple[Notice | None, bool]:
     """Write, update or withdraw the plan notice for the editor's uncommitted plan edits.
 
     Returns (notice, created_new). Returns (None, False) when the editor isn't the
     plan owner, there's no committed plan to compare with, or nobody else is affected.
+    `lanes plan accept` passes require_owner=False: the caller already checked that the
+    editor owns the committed plan, and an accepted proposal may hand the plan to someone else.
     """
-    if editor != new.owner:
+    if require_owner and editor != new.owner:
         return None, False
     old, base = committed_plan(root)
     if old is None:

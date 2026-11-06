@@ -73,6 +73,17 @@ class Ownership:
 
 
 @dataclass(frozen=True)
+class Overlap:
+    """A plan's `overlaps:` entry: two `owns` globs that are meant to overlap, and why."""
+
+    globs: tuple[str, str]
+    why: str
+
+    def names(self, a: str, b: str) -> bool:
+        return {to_posix(a), to_posix(b)} == set(self.globs) and (a != b or self.globs[0] == self.globs[1])
+
+
+@dataclass(frozen=True)
 class OwnsOverlap:
     """Two tasks' `owns` globs that can match the same path; `winner` gets it."""
 
@@ -82,6 +93,7 @@ class OwnsOverlap:
     b_glob: str
     winner: Task
     reason: str  # "more specific" | "lower rank" | "listed first"
+    why: str | None = None  # set when the plan's `overlaps:` explains it (an intended overlap)
 
 
 @dataclass
@@ -94,6 +106,7 @@ class Plan:
     tasks: list[Task] = field(default_factory=list)
     root: Path | None = None
     plan_owner: str | None = None  # explicit top-level `owner:`; see `owner` below
+    overlaps: list[Overlap] = field(default_factory=list)
 
     @property
     def owner(self) -> str | None:
@@ -161,8 +174,22 @@ class Plan:
                             winner, reason = (a if a.rank < b.rank else b), "lower rank"
                         else:
                             winner, reason = a, "listed first"
-                        found.append(OwnsOverlap(a, pa, b, pb, winner, reason))
+                        why = next((o.why for o in self.overlaps if o.names(pa, pb)), None)
+                        found.append(OwnsOverlap(a, pa, b, pb, winner, reason, why))
         return found
+
+    def stale_overlaps(self) -> list[str]:
+        """Problems with `overlaps:` entries that no longer describe a real overlap."""
+        problems: list[str] = []
+        owned = {g for t in self.tasks for g in t.owns}
+        real = self.owns_overlaps()
+        for o in self.overlaps:
+            missing = [g for g in o.globs if g not in owned]
+            if missing:
+                problems.append(f"overlaps: {', '.join(missing)} isn't in any task's `owns`")
+            elif not any(o.names(x.a_glob, x.b_glob) for x in real):
+                problems.append(f"overlaps: {o.globs[0]} and {o.globs[1]} don't overlap between two tasks; remove the entry")
+        return problems
 
     def owner_of(self, rel: str) -> Ownership:
         """Precedence: contract file > plan.yaml (the plan owner) > anything else in .lanes/ > hub file > task."""
@@ -265,10 +292,22 @@ def parse_plan(data: Any, root: Path | None = None) -> Plan:
     if plan_owner is not None:
         plan_owner = check_owner(plan_owner, "plan `owner`")
 
+    overlaps: list[Overlap] = []
+    for i, o in enumerate(_list(data, "overlaps", errors)):
+        globs = o.get("globs") if isinstance(o, dict) else None
+        why = o.get("why") if isinstance(o, dict) else None
+        if not (isinstance(globs, list) and len(globs) == 2 and all(isinstance(g, str) and g.strip() for g in globs)):
+            errors.append(f"overlaps[{i}]: `globs` must list exactly two `owns` globs")
+            continue
+        if not isinstance(why, str) or not why.strip():
+            errors.append(f"overlaps[{i}]: `why` must say why the overlap is intended")
+            continue
+        overlaps.append(Overlap((to_posix(globs[0]), to_posix(globs[1])), why.strip()))
+
     _check_cross_refs(tasks, contracts, hubs, errors)
     if errors:
         raise PlanError(errors)
-    return Plan(feature, updated, members, hubs, contracts, tasks, root, plan_owner)
+    return Plan(feature, updated, members, hubs, contracts, tasks, root, plan_owner, overlaps)
 
 
 def _list(data: dict, key: str, errors: list[str]) -> list:

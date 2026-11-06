@@ -58,6 +58,16 @@ def test_status_warns_about_overlapping_owns(in_repo, capsys, plan_dict):
     assert "T1 tests/** and T2 tests/e2e_results/**: T2 wins (more specific)" in out
 
 
+def test_status_lists_explained_overlaps_as_intended(in_repo, capsys, plan_dict):
+    plan_dict["tasks"][0]["owns"].append("tests/**")
+    plan_dict["tasks"][1]["owns"].append("tests/e2e_results/**")
+    plan_dict["overlaps"] = [{"globs": ["tests/**", "tests/e2e_results/**"], "why": "results live under tests"}]
+    write_plan(in_repo, plan_dict)
+    code, out = run(capsys, "status")
+    assert "Intended overlaps" in out and "Why: results live under tests" in out
+    assert "Warning: overlapping" not in out
+
+
 def test_status_has_no_overlap_warning_for_disjoint_globs(in_repo, capsys):
     code, out = run(capsys, "status")
     assert code == 0 and "overlapping" not in out

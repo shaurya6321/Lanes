@@ -27,6 +27,9 @@ hub_files:                       # shared files with exactly one owner
     owner: shaurya
   - path: LICENSE
     owner: shaurya
+overlaps:                        # owns globs that overlap on purpose (the more specific glob wins)
+  - globs: ["tests/**", "tests/e2e_results/**"]
+    why: T2 records the Windows gate results inside T1's tests folder; T2 owns just that subfolder.
 contracts:
   - id: lanes-interface          # CLI commands, exit codes, plan schema, .lanes/ file formats
     file: .lanes/contracts/lanes-interface.md

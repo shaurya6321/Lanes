@@ -88,3 +88,9 @@ def changed_since_head(root: Path) -> list[str]:
 
 def show_head(root: Path, rel: str) -> str | None:
     return run_git(root, "show", f"HEAD:{rel}")
+
+
+def tracked_files(root: Path) -> list[str]:
+    """Files git knows about: tracked plus untracked-but-not-ignored, as repo-relative POSIX paths."""
+    out = run_git(root, "ls-files", "-z", "--cached", "--others", "--exclude-standard", timeout=15)
+    return sorted({p for p in out.split("\0") if p}) if out else []

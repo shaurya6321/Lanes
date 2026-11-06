@@ -127,6 +127,36 @@ def test_equally_specific_globs_go_to_the_lower_rank(plan_dict):
     assert plan.owner_of("src/pages/checkout/x.tsx").task.id == "T2"
 
 
+@pytest.mark.parametrize(
+    "entry, needle",
+    [
+        ({"globs": ["a/**"], "why": "x"}, "exactly two"),
+        ({"globs": ["a/**", 3], "why": "x"}, "exactly two"),
+        ({"globs": ["a/**", "a/b/**"]}, "`why`"),
+        ("a/** and a/b/**", "exactly two"),
+    ],
+)
+def test_overlaps_entries_are_validated(plan_dict, entry, needle):
+    plan_dict["overlaps"] = [entry]
+    assert any(needle in e for e in errors_of(plan_dict))
+
+
+def test_explained_overlap_is_intended_and_stale_entries_are_reported(plan_dict):
+    plan_dict["tasks"][0]["owns"].append("tests/**")
+    plan_dict["tasks"][1]["owns"].append("tests/e2e_results/**")
+    plan_dict["overlaps"] = [
+        {"globs": ["tests/e2e_results/**", "tests/**"], "why": "T2 records results in T1's tests folder"},
+        {"globs": ["src/api/cart/**", "src/emails/**"], "why": "stale"},
+        {"globs": ["tests/**", "docs/**"], "why": "typo"},
+    ]
+    plan = parse_plan(plan_dict)
+    [o] = plan.owns_overlaps()
+    assert o.why == "T2 records results in T1's tests folder"
+    stale = plan.stale_overlaps()
+    assert any("src/api/cart/** and src/emails/** don't overlap" in x for x in stale)
+    assert any("docs/** isn't in any task's `owns`" in x for x in stale)
+
+
 def test_no_overlaps_in_the_fixture_plan(repo):
     assert load_plan(repo).owns_overlaps() == []
 
