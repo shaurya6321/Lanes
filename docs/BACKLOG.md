@@ -13,6 +13,7 @@ Phase 0 deliberately leaves these out. Each line says which phase it belongs to 
 - `/lanes-integrate`: ordered merges, Mergiraf, running the combined tests.
 
 ## Known gaps in Phase 0
+- **`lanes init` should update Lanes-managed slash commands when their template version changes.** Mark managed files with a version header, and never touch user-edited ones. Today `init` writes a command only if it's missing, so a repo set up with an older Lanes keeps the old `/lanes-status`, `/lanes-handoff` and `/lanes-plan`.
 - **Writes made through Bash aren't guarded before they happen.** Only the pre-commit check catches them. A future option is a PreToolUse hook on Bash that parses common write patterns. It would be best-effort. The same gap applies to `.lanes/notices/`: the guard blocks Edit/Write/NotebookEdit there, but a shell command like `echo > .lanes/notices/x.md` isn't caught, and the commit check allows notices because the `lanes` commands write them legitimately.
 - **Overlapping globs between different owners** (for example `src/**` and `src/api/**`) don't make `plan.yaml` invalid, because an invalid plan turns the guard off. `lanes status` warns about any overlap not explained under `overlaps:`, and `lanes plan check` rejects such a proposal. At lookup time the most specific pattern wins.
 - **Read state for notices** is kept in one append-only file per member, `.lanes/notices/read-by/<member>.txt`. That avoids git conflicts but grows forever. Prune it once the plan is archived.
