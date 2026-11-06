@@ -1,6 +1,6 @@
 [project]
 name = "lanes"
-version = "0.1.0"
+version = "0.2.0"
 description = "Shared plan, separate lanes: coordinate 2-6 people each running a coding agent on the same repo."
 readme = "README.md"
 requires-python = ">=3.11"

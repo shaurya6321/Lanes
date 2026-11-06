@@ -2,6 +2,8 @@
 
 The plan is the single source of truth for who does what. It lives in git, and every teammate's agent reads it at the start of each session. Run `lanes status` to check it: an invalid plan prints every problem at once.
 
+You can write it by hand, or describe the work in plain words in `.lanes/PLAN.md` and let `/lanes-plan` propose it (see [Planning with `/lanes-plan`](#planning-with-lanes-plan)).
+
 ## Example
 
 ```yaml
@@ -64,6 +66,16 @@ tasks:
 | `tasks[].uses` | no | Contract ids this task relies on. The task gets a notice when one of them changes. |
 | `tasks[].depends_on` | no | Task ids that must come first. Each must have a **lower** rank. |
 | `tasks[].status` | no | One of `todo` (the default), `in_progress`, `blocked`, `review`, `done`. The task's owner changes it with `lanes task status TASK STATUS`. |
+| `overlaps[].globs` | no | Two `owns` globs, from different tasks, that overlap on purpose. |
+| `overlaps[].why` | yes, per entry | Why the overlap is intended. `lanes status` lists explained overlaps as intended and warns about the rest. |
+
+For example, a task that owns `tests/**` and another that owns `tests/e2e_results/**` overlap. The nested glob wins for files under `tests/e2e_results/`. To mark that as intended:
+
+```yaml
+overlaps:
+  - globs: ["tests/**", "tests/e2e_results/**"]
+    why: T2 records the Windows gate results inside T1's tests folder.
+```
 
 ## Globs
 
@@ -78,12 +90,13 @@ tasks:
 
 Lanes checks these in order, and the first match decides:
 
-1. **A contract file:** the contract's owner. This check comes before rule 3 because contracts live in `.lanes/`.
+1. **A contract file:** the contract's owner. This check comes before rule 4 because contracts live in `.lanes/`.
 2. **`.lanes/plan.yaml`:** the plan owner (`owner:`, or else the rank-1 task's owner). The guard blocks everyone else's edits. The commit check blocks their commits too, with one exception: a change whose only difference from the last committed plan is the `status` of tasks they own. That is what `lanes task status` writes. For commits, the plan owner is read from the **committed** plan, so editing `owner:` to yourself doesn't help. An invalid plan turns the guard off (fail-open), so anyone can repair it.
-3. **Anything else under `.lanes/`:** anyone may write it. This covers handoffs, summaries and `decisions.md`. Notices in `.lanes/notices/` may be committed by anyone but are written only by `lanes` commands and the hooks; the guard blocks direct edits there.
-4. **A hub file:** the hub file's owner. If several hub patterns match, the most specific one wins.
-5. **A task's `owns` glob:** that task's owner. If several patterns match, the most specific wins, meaning the one with the longest literal prefix. For example, `tests/e2e_results/**` beats `tests/**`, so `tests/e2e_results/x.md` belongs to the task that owns the nested glob. If two globs are equally specific, the lower rank number wins. Nesting one task's glob inside another's is allowed, but `lanes status` lists every overlapping pair and which task wins, so an accidental overlap doesn't go unnoticed.
-6. **Nothing matched:** the path is unowned, and nobody may edit it until the plan gives it an owner.
+3. **A plan proposal** (`.lanes/plan.proposed.yaml` and anything under `.lanes/proposal/`): the plan owner, exactly like `plan.yaml`. The guard blocks everyone else's edits, and the commit check reads the plan owner from the committed plan.
+4. **Anything else under `.lanes/`:** anyone may write it. This covers `PLAN.md`, handoffs, summaries and `decisions.md`. Notices in `.lanes/notices/` may be committed by anyone but are written only by `lanes` commands and the hooks; the guard blocks direct edits there.
+5. **A hub file:** the hub file's owner. If several hub patterns match, the most specific one wins.
+6. **A task's `owns` glob:** that task's owner. If several patterns match, the most specific wins, meaning the one with the longest literal prefix. For example, `tests/e2e_results/**` beats `tests/**`, so `tests/e2e_results/x.md` belongs to the task that owns the nested glob. If two globs are equally specific, the lower rank number wins. Nesting one task's glob inside another's is allowed, but `lanes status` warns about every overlapping pair that `overlaps:` doesn't explain, and says which task wins, so an accidental overlap doesn't go unnoticed.
+7. **Nothing matched:** the path is unowned, and nobody may edit it until the plan gives it an owner.
 
 You may edit a path when you are its owner through any of your tasks, hub files or contracts.
 
@@ -108,12 +121,73 @@ You may edit a path when you are its owner through any of your tasks, hub files 
 - the same glob claimed by two different owners
 - a bad `rank` or `status`
 
-When the plan is invalid, the lane guard **fails open**: it allows edits and shows a warning. A typo in the plan therefore never blocks anyone's session.
+- an `overlaps` entry without exactly two globs or without a `why`
+
+When the plan is invalid, the lane guard **fails open**: it allows edits and shows a warning. A typo in the plan therefore never blocks anyone's session. Overlapping globs and stale `overlaps` entries are only warnings for the same reason; `lanes plan check` is stricter (below).
+
+## Planning with `/lanes-plan`
+
+Instead of writing `plan.yaml` by hand, the team describes the work and Claude proposes how to divide it. The same flow works for the first plan and for re-planning mid-project.
+
+1. **Write `.lanes/PLAN.md`** together. `lanes init` creates it with four sections: the goal, what needs building, the team (one line per member id with their preferences, such as `- friend: the CLI`), and rules. Anyone may edit it.
+2. **The plan owner runs `/lanes-plan`** in Claude Code. Claude runs `lanes plan context`, which prints PLAN.md, the current plan, the existing contracts, the repo's files and the import graph between them (Python and JS/TS), with hub candidates and clusters of coupled files. Claude then writes a proposal and never touches `plan.yaml`. It follows these rules:
+   - Assignments and preferences in PLAN.md always win.
+   - Tightly coupled files stay in one task, and shared hub files get one owner.
+   - Every interface between tasks gets a contract, drafted before anyone codes.
+   - Ranks follow dependencies: upstream tasks get the lower rank.
+   - Every file the work touches has exactly one owner, and overlaps exist only when intended and explained.
+   - Existing contracts are reused, never edited or duplicated.
+3. **Review it.** `lanes plan check` validates it, and `lanes plan diff` shows what would change, including **what moves**: every file in the repo whose owner changes, grouped by folder.
+4. **Accept it.** The plan owner runs `lanes plan accept`, then commits `.lanes/` and runs `lanes sync`.
+
+### The proposal files
+
+`.lanes/plan.proposed.yaml` is a complete plan in the format above, followed by a `proposal:` block that `accept` removes:
+
+```yaml
+proposal:
+  based_on: 543c04ed0527          # printed by `lanes plan context`: a hash of the plan.yaml it started from
+  touches: [notes/models.py, notes/export.py, "web/pages/**"]   # every path the work creates or changes
+  rationale:
+    T1: models, storage and search are imported by everything else; PLAN.md gives them to shaurya.
+```
+
+Each **new** contract is drafted at `.lanes/proposal/contracts/<name>.md`, and the proposal gives it its final `file:` under `.lanes/contracts/`. Only the plan owner may write any of these files.
+
+### What `lanes plan check` rejects
+
+Everything that makes a plan invalid (see Validation), plus:
+
+- a path in `touches` that no task or hub file owns
+- `owns` globs of two tasks that overlap without an `overlaps:` entry
+- a contract that no task implements, that more than one task implements, or that no task uses
+- a task using a contract implemented by a task of the same or a higher rank
+- a contract file that's missing, or a draft that would overwrite an existing contract
+
+It warns (without failing) about:
+
+- a user of a contract that doesn't depend on the implementer
+- a hub file inside another member's `owns`
+- a PLAN.md team name that isn't a member, and a member with no task
+- repo files nobody owns
+- stale `overlaps` entries
+- a proposal drafted from an older `plan.yaml` (`based_on` doesn't match)
+
+### What `lanes plan accept` does
+
+- **Owner only:** it runs only for the plan owner, as recorded in the committed plan, and only if `check` passes. If `plan.yaml` changed since the proposal was drafted, it refuses unless you pass `--force`.
+- **Writes `plan.yaml`:** it replaces `plan.yaml` with the proposal, keeping the proposal's comments, removing the `proposal:` block and setting `updated` to today.
+- **Keeps statuses:** every existing task keeps its **current** status, because statuses belong to task owners.
+- **Moves drafts:** it moves the draft contracts into `.lanes/contracts/` and deletes the proposal.
+- **Notifies:** it writes the normal plan notice to every task whose `owns`, `uses`, `implements`, `owner` or `rank` changed, and to former owners.
 
 ## Other files in `.lanes/`
 
 | Path | What it holds |
 |---|---|
+| `PLAN.md` | The plan in plain words, for `/lanes-plan`. Anyone may edit it. |
+| `plan.proposed.yaml` | A plan proposal waiting for `lanes plan accept`. Plan owner only. |
+| `proposal/contracts/<id>.md` | Draft contracts for the proposal. Plan owner only. |
 | `contracts/<id>.md` | Interface documents. Start from `contracts/_TEMPLATE.md`. |
 | `notices/<timestamp>-<from>-<topic>.md` | Change notices and requests: YAML front matter plus a short body. |
 | `notices/read-by/<member>.txt` | Ids of the notices that member has read. Only that member writes it, so it never conflicts in git. |

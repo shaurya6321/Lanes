@@ -59,6 +59,16 @@ claude
 
 The first time you open a repo, Claude Code asks whether you trust it. Say yes, or the project hooks won't run. The session should begin with a **Lanes briefing** that shows your tasks and owned files, and a status line saying `Lanes: briefing loaded for <you>`.
 
+## Planning (the plan owner)
+
+Before the team starts, or whenever the work needs re-dividing:
+
+1. Everyone adds to `.lanes/PLAN.md` (created by `lanes init`): the goal, what needs building, one line per person with their member id and preferences (for example `- friend: the CLI`), and any rules. Then `lanes sync`.
+2. The plan owner runs `/lanes-plan` in Claude Code. It writes a proposal to `.lanes/plan.proposed.yaml` and never edits `.lanes/plan.yaml`.
+3. The plan owner reviews it with `lanes plan diff`, then runs `lanes plan accept` and `lanes sync`. Teammates whose tasks changed get a plan notice in their next briefing.
+
+Only the plan owner can write or accept a proposal. Everyone else shapes the plan through PLAN.md or `lanes request --file .lanes/plan.yaml "..."`.
+
 ## Daily loop
 
 1. **Sync** at the start: `lanes sync`. In Phase 0, notices, summaries and handoffs travel through git, so this is how you receive them.
@@ -85,6 +95,8 @@ If you run `git pull --rebase` yourself instead of `lanes sync`, it refuses when
 | `uv run lanes`: "Failed to spawn: `lanes`" | Run `uv sync` in the project first. Until you do, the hooks and the commit check are skipped (fail-open) rather than blocking you. |
 | "only its owner can change its status" or a blocked edit of `plan.yaml` | Only the plan owner edits `.lanes/plan.yaml`. Change your own task's status with `lanes task status <TASK> <status>`, and ask the plan owner for anything else with `lanes request --file .lanes/plan.yaml "..."`. |
 | "can't tell who you are" or "doesn't match any member email" | Your `git config user.email` in this repo isn't in `members` in `.lanes/plan.yaml`, and `LANES_USER` isn't set. Run `lanes whoami`; the message says which email it saw and how to fix it. |
+| "only the plan owner" when writing `.lanes/plan.proposed.yaml` or running `lanes plan accept` | Only the plan owner proposes and accepts plans. Edit `.lanes/PLAN.md` instead, and ask the plan owner to run `/lanes-plan`. |
+| `lanes plan accept` says plan.yaml changed since the proposal was drafted | Someone changed the plan after `/lanes-plan` ran. Run `/lanes-plan` again, or check `lanes plan diff` and use `lanes plan accept --force`. |
 | "plan.yaml is invalid" | Run `lanes status` to see every error. Fix the plan, then `lanes sync`. |
 | A teammate didn't get your notice | You haven't run `lanes sync` since writing it, they haven't synced since, or you're on different branches. |
 | `lanes sync` says "Not pushed: … contain code" | You have unpushed code commits. Push them when ready with `lanes sync --include-code` (or `git push`). The `.lanes/` commit is already made and will go with them. |

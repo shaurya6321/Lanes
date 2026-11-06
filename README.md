@@ -7,6 +7,7 @@
 When two people point coding agents at one repo, neither agent knows what the other is doing. Lanes gives every session the same picture:
 
 - **One shared plan** (`.lanes/plan.yaml`). The feature is split into ranked tasks, and each task has an owner and a set of owned files (its *lane*).
+- **A planner.** Describe the work in plain words in `.lanes/PLAN.md`, and `/lanes-plan` proposes the split: tasks, lanes, hub files, contracts and ranks. Nothing changes until the plan owner reviews the proposal and accepts it.
 - **A briefing at session start.** Claude is told who you are, what your lane is, what teammates are doing, and what changed since your last session.
 - **A lane guard.** If Claude tries to edit a file outside your lane, a hook stops it and tells it who to ask instead.
 - **One-way change notices.** When you change a contract or shared file you own, a short notice goes to downstream tasks only (lower rank to higher rank), so two agents never ping-pong.
@@ -24,9 +25,10 @@ You need [uv](https://docs.astral.sh/uv/), git and Claude Code. Teammates on Win
 # 1. One person sets up the repo
 cd path/to/your-project
 uv init --bare                                    # only if the repo has no pyproject.toml yet (e.g. a JS repo)
-uv add --dev "lanes @ git+https://github.com/shaurya6321/Lanes@v0.1.0"
+uv add --dev "lanes @ git+https://github.com/shaurya6321/Lanes@v0.2.0"
 uv run lanes init --local                         # .lanes/, CLAUDE.md, AGENTS.md, .claude/settings.json, git hook
-#    then edit .lanes/plan.yaml: members (with their git emails), tasks, owned globs, contracts
+#    then list members (with their git emails) in .lanes/plan.yaml, write .lanes/PLAN.md,
+#    and run /lanes-plan in Claude (or edit the plan's tasks, globs and contracts by hand)
 git add -A && git commit -m "Set up Lanes" && git push
 
 # 2. Each teammate, after cloning
@@ -59,10 +61,22 @@ To check it's working, run `uv run lanes whoami` (your tasks and owned files) an
 | `lanes notices amend ID --summary "…"` | Rewrites the summary (and `--body`) of a notice you wrote, as long as nobody has read it yet. Files in `.lanes/notices/` are never edited directly; the guard blocks that. |
 | `lanes request --file PATH "msg"` | Asks a path's owner for a change. |
 | `lanes task status TASK STATUS` | Sets the status of a task you own. Only the plan owner edits `plan.yaml` directly; this is how everyone else updates status, and the commit check accepts it. Status changes never send notices. |
+| `lanes plan context` | Prints what `/lanes-plan` reads: PLAN.md, the plan, contracts, the repo's files and its import graph, with hub candidates and clusters of coupled files. |
+| `lanes plan check` | Validates `.lanes/plan.proposed.yaml`: unowned paths, unexplained overlaps, contract and rank rules, and members. Exits 1 if there are problems. |
+| `lanes plan diff` | Shows what accepting the proposal would change, including every file whose owner moves. |
+| `lanes plan accept` | Plan owner only. Replaces `plan.yaml` with the proposal, keeps every task's current status, moves draft contracts into place and sends the plan notices. |
 | `lanes handoff [TASK]` | Creates a handoff note from the template and prints its path. |
 | `lanes sync` | Shares `.lanes/` with the team: commits `.lanes/` only, runs `git pull --rebase --autostash`, then pushes. It pushes on its own only when every unpushed commit is `.lanes/`-only; otherwise it lists your code commits and stops (exit 3) unless you pass `--include-code`. |
 
-In Claude Code, `/lanes-status` explains the current status, and `/lanes-handoff` writes a handoff note.
+In Claude Code, `/lanes-status` explains the current status, `/lanes-handoff` writes a handoff note, and `/lanes-plan` proposes a plan from `.lanes/PLAN.md`.
+
+## Planning
+
+1. The team writes `.lanes/PLAN.md` in plain words. It covers the goal, what needs building, one line per person with their preferences ("friend: the CLI"), and any rules.
+2. The plan owner runs `/lanes-plan`. Claude reads PLAN.md, the current plan, the existing contracts and the repo's import structure. It writes a proposal to `.lanes/plan.proposed.yaml`, with new contracts drafted in `.lanes/proposal/contracts/`, and never touches `plan.yaml`. PLAN.md's assignments always win. Coupled files stay in one task, shared files get one owner, and every interface between tasks gets a contract before anyone codes. Ranks follow dependencies, and every file the work touches gets exactly one owner.
+3. Review it with `lanes plan check` and `lanes plan diff`, then the plan owner runs `lanes plan accept` and `lanes sync`.
+
+To re-plan mid-project, edit PLAN.md and run `/lanes-plan` again. The diff shows which files move to whom, accepting keeps everyone's task status, and affected teammates get a plan notice. Details are in [docs/PLAN_FORMAT.md](docs/PLAN_FORMAT.md#planning-with-lanes-plan).
 
 ## How it works
 
