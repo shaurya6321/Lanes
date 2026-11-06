@@ -288,7 +288,7 @@ def init_repo(
         report.add(merge_settings(root / ".claude" / "settings.json", runner), ".claude/settings.json (hooks)")
     except ValueError as exc:
         report.warnings.append(str(exc))
-    for cmd in ("lanes-status.md", "lanes-handoff.md"):
+    for cmd in ("lanes-status.md", "lanes-handoff.md", "lanes-plan.md"):
         _write_new(root / ".claude" / "commands" / cmd, render(f"commands/{cmd}", lanes=L), report, f".claude/commands/{cmd}")
 
     if runner == LOCAL and not _declares_lanes(root / "pyproject.toml"):

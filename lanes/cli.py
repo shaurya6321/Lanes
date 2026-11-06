@@ -341,6 +341,15 @@ def cmd_plan(args) -> int:
             return EXIT_OK
         print(f"{P.PROPOSAL_FILE}: {len(res.errors)} problem(s) to fix before it can be accepted.")
         return EXIT_ERROR
+    if args.plan_action == "context":
+        from .identity import resolve
+        from .plancontext import build_context
+
+        root = _root()
+        plan = P.current_plan(root)
+        member = resolve(plan, root).member_id if plan else None
+        sys.stdout.write(build_context(root, member))
+        return EXIT_OK
     if args.plan_action == "diff":
         root = _root()
         try:
@@ -439,6 +448,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     s = sub.add_parser("plan", help="review and accept a plan proposal written by /lanes-plan")
     plan_sub = s.add_subparsers(dest="plan_action", required=True)
+    plan_sub.add_parser("context", help="print what /lanes-plan reads: PLAN.md, the plan, contracts, files and the import graph").set_defaults(func=cmd_plan)
     plan_sub.add_parser("check", help="validate .lanes/plan.proposed.yaml (exit 1 if it has problems)").set_defaults(func=cmd_plan)
     plan_sub.add_parser("diff", help="show what accepting the proposal would change, including files that move").set_defaults(func=cmd_plan)
     a = plan_sub.add_parser("accept", help="plan owner only: replace plan.yaml with the proposal and send plan notices")
