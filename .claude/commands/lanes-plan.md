@@ -22,7 +22,11 @@ Stop and tell me, without writing anything, if:
 5. **One owner per file.** Every file the work will create or change is owned by exactly one task or hub entry. List them all in `proposal.touches`: existing files to change, new files to create, or directory globs for new areas. `owns` globs of different tasks must not overlap. If an overlap is intended, add it to `overlaps:` with a `why`.
 6. **Reuse contracts.** If an existing contract already covers an interface, reference it by its id. Never edit an existing contract file, and don't invent a new contract for the same thing.
 
-When re-planning (a plan already exists), keep task ids, owners, `owns` globs and members stable unless PLAN.md asks for a change. Avoid moving files away from an `in_progress` task. Keep the current `owner:` (plan owner) and members' emails. A new member from PLAN.md's Team section gets `email: null`; say in the rationale that they must add their git email.
+If the current plan is still the `lanes init` example (feature `my-feature`, tasks owning `src/api/**` and `src/ui/**`, contract `example-api`), this is a first plan: name `feature` after the goal and replace the example tasks and contract (keep the members, `owner:` and the init hub files).
+
+Changing `owns`, `hub_files` and `contracts` is what a proposal is for. It needs no separate OK, because the plan owner reviews the diff and accepting is the OK.
+
+When re-planning a real plan, keep task ids, owners, `owns` globs and members stable unless PLAN.md asks for a change. Avoid moving files away from an `in_progress` task. Keep the current `owner:` (plan owner) and members' emails. A new member from PLAN.md's Team section gets `email: null`; say in the rationale that they must add their git email.
 
 ## 3. Write the proposal (only these paths)
 - `.lanes/plan.proposed.yaml`: a complete plan in the same schema as `.lanes/plan.yaml` (spec: docs/PLAN_FORMAT.md in the Lanes repo), followed by:
