@@ -10,7 +10,7 @@ The project uses the **repo-only** install: Lanes is a dev dependency, nothing i
 mkdir lanes-e2e && cd lanes-e2e && git init -b main
 git config user.email <A's email>
 uv init --bare
-uv add --dev "lanes @ git+https://github.com/shaurya6321/Lanes@v0.1.0"
+uv add --dev "lanes @ git+https://github.com/shaurya6321/Lanes@v0.2.0"
 uv run lanes init --local --member shaurya
 ```
 
