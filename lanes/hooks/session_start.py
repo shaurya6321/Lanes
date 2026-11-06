@@ -13,6 +13,7 @@ from pathlib import Path
 
 from .. import gitutil
 from ..notices import unread_for
+from ..paths import PROPOSAL_FILE
 from ..plan import Plan
 from ..runner import lanes_cmd
 from ..summaries import read_sections
@@ -76,6 +77,9 @@ def build_briefing(
 ) -> tuple[str, dict]:
     L = lanes_cmd(root)
     fixed = _fixed_part(plan, member, identity_detail, L)
+    if (root / PROPOSAL_FILE).is_file():
+        who = "You are the plan owner: review" if member == plan.owner else f"The plan owner ({plan.owner}) reviews"
+        fixed += f"\nA plan proposal is waiting in {PROPOSAL_FILE}. {who} it with `{L} plan diff`, then `{L} plan accept`.\n"
 
     # Optional, time-stamped items: (timestamp, section, text). Newest are kept first.
     items: list[tuple[datetime, str, str]] = []

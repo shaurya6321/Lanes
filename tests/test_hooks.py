@@ -494,3 +494,30 @@ def test_hooks_are_fast(repo, clean_env):
     ):
         worst = max(worst, run_hook(name, data, repo, clean_env).elapsed)
     assert worst < 1.0, f"slowest hook took {worst:.3f}s"
+
+
+# ---- plan proposals: plan owner only ----------------------------------------------------
+
+
+@pytest.mark.parametrize("rel", [".lanes/plan.proposed.yaml", ".lanes/proposal/contracts/pricing.md", ".Lanes/Plan.Proposed.yaml"])
+def test_guard_keeps_proposal_files_to_the_plan_owner(repo, clean_env, rel):
+    p = run_hook("pre_tool_guard", edit(repo, rel, tool="Write"), repo, clean_env, user="friend")
+    reason = p.json["hookSpecificOutput"]["permissionDecisionReason"]
+    assert p.json["hookSpecificOutput"]["permissionDecision"] == "deny"
+    assert "only the plan owner, shaurya" in reason and ".lanes/PLAN.md" in reason
+    p = run_hook("pre_tool_guard", edit(repo, rel, tool="Write"), repo, clean_env, user="shaurya")
+    assert p.returncode == 0 and p.stdout == ""
+
+
+def test_guard_allows_anyone_to_edit_plan_md(repo, clean_env):
+    p = run_hook("pre_tool_guard", edit(repo, ".lanes/PLAN.md", tool="Write"), repo, clean_env, user="sam")
+    assert p.returncode == 0 and p.stdout == ""
+
+
+def test_briefing_mentions_a_waiting_proposal(repo, clean_env):
+    (repo / ".lanes" / "plan.proposed.yaml").write_text("feature: x\n")
+    p = run_hook("session_start", payload("SessionStart", repo, source="startup"), repo, clean_env, user="shaurya")
+    ctx = p.json["hookSpecificOutput"]["additionalContext"]
+    assert "A plan proposal is waiting" in ctx and "You are the plan owner" in ctx and "lanes plan diff" in ctx
+    p = run_hook("session_start", payload("SessionStart", repo, source="startup"), repo, clean_env, user="friend")
+    assert "The plan owner (shaurya) reviews it" in p.json["hookSpecificOutput"]["additionalContext"]

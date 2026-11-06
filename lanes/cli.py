@@ -138,6 +138,13 @@ def cmd_status(args) -> int:
     if broken:
         print(f"Warning: {len(broken)} notice file(s) could not be read (fix the front matter): {', '.join(broken)}")
 
+    from .paths import PROPOSAL_FILE
+
+    if (ctx.root / PROPOSAL_FILE).is_file():
+        L = lanes_cmd(ctx.root)
+        print(f"\nA plan proposal is waiting ({PROPOSAL_FILE}). The plan owner ({plan.owner}) reviews it with "
+              f"`{L} plan diff` and applies it with `{L} plan accept`.")
+
     overlaps = plan.owns_overlaps()
     intended = [o for o in overlaps if o.why]
     unexplained = [o for o in overlaps if not o.why]

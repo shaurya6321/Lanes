@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from .paths import is_proposal_path
 from .plan import Ownership, Plan
 from .runner import lanes_cmd
 
@@ -32,6 +33,12 @@ def check_lane(plan: Plan, member_id: str, rel_path: str) -> LaneDecision:
             f"  {L} task status <TASK> <todo|in_progress|blocked|review|done>\n"
             f"For anything else (owned files, contracts, new tasks), ask the plan owner:\n"
             f'  {L} request --file "{rel_path}" "<what you need changed and why>"'
+        )
+    elif own.kind == "proposal":
+        reason = (
+            f"Lanes lane guard: `{rel_path}` is part of a plan proposal, which only the plan owner, {own.owner}, writes "
+            f"(with /lanes-plan). To shape the plan, edit .lanes/PLAN.md (anyone may), or ask the plan owner:\n"
+            f'  {L} request --file .lanes/plan.yaml "<what you need changed and why>"'
         )
     elif own.kind == "unowned":
         reason = (
@@ -87,9 +94,13 @@ def check_commit_path(root, plan: Plan, member_id: str, rel_path: str, staged: b
     The plan owner is taken from the COMMITTED plan, so nobody can make themselves
     owner and commit it in one go.
     """
+    from .plandiff import committed_plan, status_only_change
+
+    if is_proposal_path(rel_path):  # judged by the COMMITTED plan's owner, like plan.yaml
+        committed, _ = committed_plan(root)
+        return check_lane(committed or plan, member_id, rel_path)
     if rel_path.lower() != ".lanes/plan.yaml":
         return check_lane(plan, member_id, rel_path)
-    from .plandiff import committed_plan, status_only_change
 
     ok, why = status_only_change(root, member_id, staged=staged)
     if ok is None:  # no committed plan to compare with (e.g. the first commit)
@@ -104,6 +115,8 @@ def check_commit_path(root, plan: Plan, member_id: str, rel_path: str, staged: b
 def _describe(own: Ownership) -> str:
     if own.kind == "plan":
         return "the plan"
+    if own.kind == "proposal":
+        return "the plan proposal"
     if own.kind == "contract" and own.contract:
         return f"contract `{own.contract.id}`"
     if own.kind == "hub" and own.hub:

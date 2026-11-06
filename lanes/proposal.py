@@ -26,20 +26,14 @@ from typing import Any
 import yaml
 
 from . import gitutil
-from .paths import PLAN_FILE, glob_match, globs_overlap, to_posix
+from .paths import PLAN_FILE, PROPOSAL_DIR, PROPOSAL_FILE, glob_match, globs_overlap, is_proposal_path, to_posix
 from .plan import Ownership, Plan, PlanError, Task, load_plan, parse_plan
 
-PROPOSAL_FILE = ".lanes/plan.proposed.yaml"
-PROPOSAL_DIR = ".lanes/proposal"
+__all__ = ["PROPOSAL_DIR", "PROPOSAL_FILE", "is_proposal_path"]  # re-exported for callers
 DRAFT_CONTRACTS = ".lanes/proposal/contracts"
 CONTRACTS_DIR = ".lanes/contracts"
 PLAN_MD = ".lanes/PLAN.md"
 MAX_LIST = 10
-
-
-def is_proposal_path(rel: str) -> bool:
-    low = to_posix(rel).lower()
-    return low == PROPOSAL_FILE or low == PROPOSAL_DIR or low.startswith(PROPOSAL_DIR + "/")
 
 
 def plan_fingerprint(root: Path) -> str:

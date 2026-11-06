@@ -302,3 +302,36 @@ def test_cli_plan_check_diff_accept(proj, plan_dict, capsys, monkeypatch):
     assert code == 0 and "Accepted" in out and "plan notice for friend" in out and "sync" in out
     code, out = run(capsys, "plan", "diff")
     assert code == 1 and "doesn't exist" in out
+
+
+# ---- ownership of proposal files ----------------------------------------------------------
+
+
+def test_proposal_files_belong_to_the_plan_owner(proj):
+    from lanes.lane import check_commit_path, check_edit
+
+    plan = load_plan(proj)
+    for rel in (".lanes/plan.proposed.yaml", ".lanes/proposal/contracts/x.md", ".lanes/proposal"):
+        own = plan.owner_of(rel)
+        assert (own.kind, own.owner) == ("proposal", "shaurya")
+        assert check_edit(plan, "shaurya", rel).allowed
+        assert not check_edit(plan, "friend", rel).allowed
+    assert plan.owner_of(".lanes/PLAN.md").kind == "lanes"
+    assert plan.owner_of(".lanes/proposals.md").kind == "lanes"
+
+    # Making yourself plan owner in the working copy doesn't let you commit a proposal.
+    text = (proj / ".lanes" / "plan.yaml").read_text()
+    (proj / ".lanes" / "plan.yaml").write_text("owner: friend\n" + text)
+    hijacked = load_plan(proj)
+    assert hijacked.owner == "friend"
+    assert not check_commit_path(proj, hijacked, "friend", ".lanes/plan.proposed.yaml").allowed
+    assert check_commit_path(proj, hijacked, "shaurya", ".lanes/plan.proposed.yaml").allowed
+
+
+def test_status_mentions_a_waiting_proposal(proj, plan_dict, capsys, monkeypatch):
+    monkeypatch.chdir(proj)
+    code, out = run(capsys, "status")
+    assert "plan proposal is waiting" not in out
+    propose(proj, plan_dict)
+    code, out = run(capsys, "status")
+    assert "A plan proposal is waiting (.lanes/plan.proposed.yaml)" in out and "plan accept" in out

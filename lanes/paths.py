@@ -14,6 +14,8 @@ from pathlib import Path
 
 LANES_DIR = ".lanes"
 PLAN_FILE = ".lanes/plan.yaml"
+PROPOSAL_FILE = ".lanes/plan.proposed.yaml"  # written by /lanes-plan; plan owner only
+PROPOSAL_DIR = ".lanes/proposal"  # draft contracts for the proposal; plan owner only
 
 _DRIVE = re.compile(r"^[A-Za-z]:/")
 _WILDCARDS = set("*?")
@@ -38,6 +40,12 @@ def to_posix(path: str | os.PathLike) -> str:
             continue
         parts.append(seg)
     return prefix + ("/" if leading else "") + "/".join(parts)
+
+
+def is_proposal_path(rel: str) -> bool:
+    """`.lanes/plan.proposed.yaml` or anything under `.lanes/proposal/` (case-insensitive, like the file systems)."""
+    low = to_posix(rel).lower()
+    return low == PROPOSAL_FILE or low == PROPOSAL_DIR or low.startswith(PROPOSAL_DIR + "/")
 
 
 def is_absolute(path: str) -> bool:
