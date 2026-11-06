@@ -144,7 +144,7 @@ def test_init_creates_working_setup(fresh, capsys):
     assert code == 0
     for rel in (
         ".lanes/plan.yaml", ".lanes/contracts/example-api.md", ".lanes/contracts/_TEMPLATE.md",
-        ".lanes/handoffs/_TEMPLATE.md", ".lanes/decisions.md", ".lanes/notices/.gitkeep",
+        ".lanes/handoffs/_TEMPLATE.md", ".lanes/decisions.md", ".lanes/PLAN.md", ".lanes/notices/.gitkeep",
         ".lanes/summaries/.gitkeep", "CLAUDE.md", "AGENTS.md", ".claude/settings.json",
         ".claude/commands/lanes-status.md", ".claude/commands/lanes-handoff.md",
     ):
@@ -206,6 +206,17 @@ def test_init_is_idempotent_and_preserves_user_content(fresh, capsys):
     assert settings["permissions"]["allow"] == ["Bash(npm test)"]
     stop_cmds = [h["command"] for g in settings["hooks"]["Stop"] for h in g["hooks"]]
     assert stop_cmds.count("lanes") == 1 and "say done" in stop_cmds
+
+
+def test_init_writes_plan_md_template_once(fresh, capsys):
+    run(capsys, "init")
+    text = (fresh / ".lanes" / "PLAN.md").read_text()
+    for heading in ("## Goal", "## What needs building", "## Team", "## Rules"):
+        assert heading in text
+    assert "- me:" in text and "/lanes-plan" in text and "lanes plan accept" in text and "$" not in text
+    (fresh / ".lanes" / "PLAN.md").write_text("# ours\n")
+    code, out = run(capsys, "init")
+    assert "unchanged .lanes/PLAN.md" in out and (fresh / ".lanes" / "PLAN.md").read_text() == "# ours\n"
 
 
 def test_init_does_not_replace_foreign_git_hook(fresh, capsys):

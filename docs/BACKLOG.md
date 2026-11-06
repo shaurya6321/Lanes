@@ -1,6 +1,6 @@
 # Backlog
 
-Phase 0 deliberately leaves these out. Each line says which phase it belongs to and why it was deferred.
+Phase 0 deliberately leaves these out. Each line says which phase it belongs to and why it was deferred. The planner (`/lanes-plan`) was brought forward from Phase 2 into the current scope in v0.2.0.
 
 ## Phase 1
 - **Codex adapter.** Fill in `from_codex()` in `lanes/hooks/adapters.py`, add `.codex/hooks.json` and `.codex/config.toml`, and generate `AGENTS.md`. The template already renders `AGENTS.md`. Re-check whether Codex PreToolUse sees file-patch edits; if it doesn't, the pre-commit check is the guard.
@@ -10,7 +10,6 @@ Phase 0 deliberately leaves these out. Each line says which phase it belongs to 
 - **Beads-backed status.** `lanes task status` edits `plan.yaml` in git. Beads would make claims atomic without a commit.
 
 ## Phase 2 and later
-- `/lanes-plan`: the cohesion planner.
 - `/lanes-integrate`: ordered merges, Mergiraf, running the combined tests.
 
 ## Known gaps in Phase 0

@@ -276,6 +276,7 @@ def init_repo(
     _write_new(lanes / "contracts" / "_TEMPLATE.md", template("contract.md"), report, ".lanes/contracts/_TEMPLATE.md")
     _write_new(lanes / "handoffs" / "_TEMPLATE.md", template("handoff.md"), report, ".lanes/handoffs/_TEMPLATE.md")
     _write_new(lanes / "decisions.md", template("decisions.md"), report, ".lanes/decisions.md")
+    _write_new(lanes / "PLAN.md", render("PLAN.md", member=member, lanes=L), report, ".lanes/PLAN.md")
 
     report.add(ensure_line(root / ".gitignore", ".lanes/local/"), ".gitignore (.lanes/local/)")
     report.add(ensure_line(root / ".gitattributes", ".lanes/** text eol=lf"), ".gitattributes (.lanes/** eol=lf)")

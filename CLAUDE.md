@@ -9,7 +9,7 @@ Lanes is a Python CLI plus Claude Code hooks that let 2–6 people, each running
 - Before changing any hook input or output, re-read `docs/HOOKS_NOTES.md`, and check the live docs if Claude Code has updated.
 - Code must work on macOS and Windows. Use `pathlib` and `lanes.paths.to_posix` for any path you match. Don't add bash or PowerShell scripts.
 - Never write secrets into notices, summaries or handoffs. Everything written goes through `lanes.redact.redact`.
-- Current scope is Phase 0. Ideas for Phase 1 and later (servers, Agent Mail, Beads, the Codex adapter, the planner, the integrator) go in `docs/BACKLOG.md`; don't build them.
+- Current scope is Phase 0 plus the planner (`.lanes/PLAN.md`, `/lanes-plan`, `lanes plan ...`), which was brought forward from Phase 2. Other ideas for Phase 1 and later (servers, Agent Mail, Beads, the Codex adapter, the integrator) go in `docs/BACKLOG.md`; don't build them.
 
 <!-- lanes:begin (managed by `lanes init`; edit lanes/templates/agent_instructions.md, not this block) -->
 ## Working with Lanes
